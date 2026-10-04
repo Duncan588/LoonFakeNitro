@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Redirecting…</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="font-family:-apple-system,sans-serif;padding:40px;text-align:center">
+<p id="msg">Opening plugin installer…</p>
+<p><a id="fallback" style="color:#5865A8">If nothing opens, tap here</a></p>
+<script>
+var q = new URLSearchParams(location.search);
+var target = q.get("t");
+if (!target) { document.getElementById("msg").textContent = "Missing target."; }
+else {
+  setTimeout(function(){ location.replace(target); }, 300);
+  var a = document.getElementById("fallback");
+  a.href = target; a.textContent = "tap here to open: " + target.slice(0, 60) + "…";
+}
+</script></body></html>

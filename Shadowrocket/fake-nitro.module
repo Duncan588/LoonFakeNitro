@@ -1,0 +1,26 @@
+#!name=Discord Fake Nitro
+#!desc=Discord 假会员 V1.19
+#!author=DiscordLoon
+#!homepage=https://github.com/Duncan588/LoonFakeNitro
+#!icon=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/assets/fake-nitro.jpg
+
+# Shadowrocket 模块。安装:配置 → 模块 → 右上角 + → 填链接 → 下载。
+# argument 里的 user_id 填你自己的 Discord 用户 ID(留空=对所有资料页生效,不推荐)
+# 黑名单: 在 App 里点拉黑即自动记录; 额外手动 id 填在 manual_ids(逗号分隔)
+
+[Argument]
+enabled = switch,true,tag=启用插件
+manual_ids = input,,tag=手动黑名单,desc=额外用户ID,逗号分隔;App内拉黑自动记录
+emoji_size = select,48,16,32,48,56,64,96,128,160,256,512,1024,type=number,tag=表情链接尺寸
+user_id = input,,tag=伪装用户 ID,desc=只有资料页是这个 id 才注入;留空=全部人
+block_server = input,,tag=黑名单同步服务器,desc=拉黑列表跨设备同步的服务器地址(如 http://x.x.x.x:1280/block)。留空=只在本设备记录
+
+[Script]
+Nitro Display = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/[^\/]+\/profile(\?|$), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/fake-nitro-display.sr.js?v=1109, requires-body=1, timeout=15, argument=enabled=true&feature=display&user_id=
+Nitro Entitlements = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me\/entitlements(?!\/), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/fake-nitro-display.sr.js?v=1109, requires-body=1, timeout=15, argument=enabled=true&feature=display&user_id=
+FakeNitro Send = type=http-request, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/messages(\/\d+)?(\?|$), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/fakenitro-send.sr.js?v=1109, requires-body=1, timeout=15, argument=enabled=true&emoji_size=48
+FakeNitro Emoji Directory = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/(guilds\/\d+\/(top-emojis|emojis)|channels\/\d+\/messages|emojis), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/fakenitro-catalog.sr.js?v=1109, requires-body=1, timeout=20, argument=enabled=true&emoji_size=48&block_server=
+Block Record = type=http-request, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me\/relationships\/\d+(\?|$), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/blocklist-record.sr.js?v=1109, requires-body=1, timeout=15, argument=enabled=true&manual_ids=&block_server=
+
+[MITM]
+hostname = %APPEND% discord.com, *.discord.com
