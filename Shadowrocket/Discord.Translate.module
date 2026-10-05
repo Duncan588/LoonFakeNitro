@@ -1,5 +1,5 @@
 #!name=Discord Translate
-#!desc=Discord 实时翻译 V1.19
+#!desc=Discord 实时翻译 V1.20
 #!author=DiscordLoon
 #!homepage=https://github.com/Duncan588/LoonFakeNitro
 #!icon=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/assets/discord-translate.jpg
@@ -8,12 +8,12 @@
 # 安装:配置 → 模块 → 右上角 + → 填链接 → 下载
 # 前提:① 全局路由设为「配置」 ② 对该配置开启 HTTPS 解密并信任证书
 # 参数:改 argument= 后面的 k=v,多项用 & 连接(不要用 JSON —— 逗号会把这行切碎)
-# 脚本地址钉在 v1.5(不用 latest),避免 CDN 缓存拿到旧脚本
+# 脚本地址用 main + ?v=<版本号> 破缓存,不用 latest 标签(raw CDN 会缓存旧脚本)
 
 [Script]
-Translate 响应 = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/messages, script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/translate-response.sr.js?v=1109, requires-body=1, timeout=30, argument=enabled=true&probe=false&debug=false&target_lang=zh-CN&engine=auto&provider=自定义端点&api_key=&model=&custom_base_url=&cache_on=true&maxmsgs=30&maxcalls=30&first_batch=30&bilingual=false&custom_prompt=&concurrency=
-Translate 论坛搜索 = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/threads\/search, script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/translate-response.sr.js?v=1109, requires-body=1, timeout=30, argument=enabled=true&probe=false&debug=false&target_lang=zh-CN&engine=auto&provider=自定义端点&api_key=&model=&custom_base_url=&cache_on=true&maxmsgs=30&maxcalls=30&first_batch=30&bilingual=false&custom_prompt=&concurrency=
-Translate 论坛首楼 = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/post-data, script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/translate-response.sr.js?v=1109, requires-body=1, timeout=30, argument=enabled=true&probe=false&debug=false&target_lang=zh-CN&engine=auto&provider=自定义端点&api_key=&model=&custom_base_url=&cache_on=true&maxmsgs=30&maxcalls=30&first_batch=30&bilingual=false&custom_prompt=&concurrency=
+Translate 响应 = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/messages, script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/translate-response.sr.js?v=1120, requires-body=1, timeout=30, argument=enabled=true&probe=false&debug=false&target_lang=zh-CN&engine=auto&provider=自定义端点&api_key=&model=&custom_base_url=&cache_on=true&maxmsgs=30&maxcalls=30&first_batch=30&bilingual=false&custom_prompt=&concurrency=
+Translate 论坛搜索 = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/threads\/search, script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/translate-response.sr.js?v=1120, requires-body=1, timeout=30, argument=enabled=true&probe=false&debug=false&target_lang=zh-CN&engine=auto&provider=自定义端点&api_key=&model=&custom_base_url=&cache_on=true&maxmsgs=30&maxcalls=30&first_batch=30&bilingual=false&custom_prompt=&concurrency=
+Translate 论坛首楼 = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/post-data, script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/Shadowrocket/translate-response.sr.js?v=1120, requires-body=1, timeout=30, argument=enabled=true&probe=false&debug=false&target_lang=zh-CN&engine=auto&provider=自定义端点&api_key=&model=&custom_base_url=&cache_on=true&maxmsgs=30&maxcalls=30&first_batch=30&bilingual=false&custom_prompt=&concurrency=
 
 [MITM]
 hostname = %APPEND% discord.com, *.discord.com

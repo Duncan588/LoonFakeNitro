@@ -434,6 +434,129 @@ const ORDER = ['enabled', 'probe', 'debug', 'target_lang', 'engine', 'provider',
   ok(!(payloadOf(c8) && payloadOf(c8).body), 'FN/k=v enabled=false: 仍然注入');
 }
 
+/* ---------------- 6b. v1.20 回归: 双语模式 / 多段索引 / cache_off ---------------- */
+// 假翻译: 回显 "TR:"+原文, 便于看清哪些段被送翻、哪些段丢了
+function echoGoogle(url) {
+  const m = /q=([^&]*)/.exec(url);
+  const dec = m ? decodeURIComponent(m[1]) : '';
+  return JSON.stringify([[['TR:' + dec, 'en', null, null, 10]], null, 'en']);
+}
+function runEcho(code, content, argument, opts) {
+  opts = opts || {};
+  const body = JSON.stringify([{ id: '1', content: content, type: 0 }]);
+  const calls = { http: [], done: [], store: {} };
+  const sandbox = {
+    console: { log: function () { } },
+    $argument: argument,
+    $request: { url: 'https://discord.com/api/v9/channels/123/messages?limit=25', headers: {}, method: 'GET' },
+    $response: opts.noResponse ? undefined : { status: 200, headers: {}, body: body },
+    $done: function (a) { calls.done.push(a); },
+    $notification: { post: function () { } },
+    $persistentStore: {
+      read: function (k) {
+        if (opts.seed && opts.seed[k] !== undefined) return opts.seed[k];
+        return k === undefined ? null : (calls.store[k] !== undefined ? calls.store[k] : null);
+      },
+      write: function (v, k) { calls.store[k] = v; return true; },
+      remove: function (k) { delete calls.store[k]; return true; },
+    },
+    $httpClient: {
+      get: function (o, cb) { calls.http.push(decodeURIComponent(/q=([^&]*)/.exec(o.url)[1])); cb(null, { status: 200 }, echoGoogle(o.url)); },
+      post: function (o, cb) { calls.http.push(JSON.parse(o.body).messages[1].content); cb(null, { status: 200 }, AI_OK); },
+    },
+  };
+  sandbox.globalThis = sandbox;
+  const ctx = vm.createContext(sandbox);
+  try { vm.runInContext('(function(){' + code + '\n})()', ctx, { filename: 'h-echo' }); }
+  catch (e) { calls.threw = String((e && e.message) || e); }
+  calls.out = (function () { try { return JSON.parse(calls.done[0] && calls.done[0].body)[0].content; } catch (e) { return '<no body>'; } })();
+  return calls;
+}
+const T_BILINGUAL = { enabled: true, target_lang: 'zh-CN', cache_on: false, engine: 'google', bilingual: true };
+const T_PLAIN = { enabled: true, target_lang: 'zh-CN', cache_on: false, engine: 'google', bilingual: false };
+
+// T1. 双语开启: 输出必须含原文 + 换行 + 译文
+{
+  const c = runEcho(SR, 'This is a plain english sentence', T_BILINGUAL);
+  ok(!c.threw, '双语: 抛异常 ' + c.threw);
+  ok(c.out.indexOf('This is a plain english sentence\nTR:') === 0, '双语: 未输出「原文+换行+译文」, 实际=<' + c.out + '>');
+}
+// T1b. 双语关闭: 只能有译文
+{
+  const c = runEcho(SR, 'This is a plain english sentence', T_PLAIN);
+  eq(c.out, 'TR:This is a plain english sentence', '双语关闭: 输出不是纯译文');
+}
+// T2. 用户实报 bug: "@url:`...` 之后的英文原文" 必须被翻
+{
+  const RAW = '还是希望我们能合并 @url:`https://github.com/NousResearch/hermes-agent/pull/118355`, which would make Hermes Desktop visible in Linux "App Stores"';
+  const c = runEcho(SR, RAW, T_PLAIN);
+  ok(!c.threw, '@url 段: 抛异常 ' + c.threw);
+  // 第二个可译段(URL 之后的英文)必须有译文, 不能是原文原样
+  ok(c.out.indexOf('TR:, which would make Hermes Desktop visible in Linux') !== -1,
+    '@url 之后的原文没被翻译(索引错位), 实际=<' + c.out + '>');
+  ok(c.http.length === 2, '@url 段: 可译段数应为 2, 实际 ' + c.http.length);
+  ok(c.out.indexOf('@url:`https://github.com/NousResearch/hermes-agent/pull/118355`') !== -1,
+    '@url: 保护段被破坏了');
+}
+// T2b. 多个保护段交错(URL + @提及 + 代码块)—— 4 个可译段都要翻, URL/提及/代码块零损伤
+{
+  const RAW = 'look at <@123456789> this https://a.io/x and ```code block``` plus this tail sentence here';
+  const c = runEcho(SR, RAW, T_PLAIN);
+  const trCount = (c.out.match(/TR:/g) || []).length;
+  // URL 被保护后切出 4 个自由段: "look at " / " this " / " and " / " plus this tail sentence here"
+  eq(trCount, 4, '多保护段: 可译段译文数量(每个可译段应有 1 个 TR:)');
+  eq(c.out, 'TR:look at <@123456789> TR: this https://a.io/x TR: and ```code block``` TR: plus this tail sentence here',
+    '多保护段: 拼回结果(空格/保护段必须原位)');
+  // URL 与保护段绝不能进翻译请求
+  ok(c.http.every(q => q.indexOf('a.io') === -1 && q.indexOf('123456789') === -1 && q.indexOf('code block') === -1),
+    '多保护段: 保护内容混进了翻译请求 ' + JSON.stringify(c.http));
+}
+// T2d. URL 保护正则本身: v1.20 前字符类写坏, URL 一条都匹配不到
+{
+  const RAW = 'Read https://github.com/a/b and reply';
+  const c = runEcho(SR, RAW, T_PLAIN);
+  ok(c.out.indexOf('https://github.com/a/b') !== -1, 'URL 正则: URL 丢失, 实际=<' + c.out + '>');
+  ok(c.http.every(q => q.indexOf('github.com') === -1), 'URL 正则: URL 被送进翻译请求 ' + JSON.stringify(c.http));
+  // URL 之后的英文才是真正要翻的部分
+  ok(c.out.indexOf('TR:Read ') === 0 && c.out.indexOf('TR: and reply') !== -1, 'URL 正则: URL 前后两段都要翻, 实际=<' + c.out + '>');
+}
+// T2c. 双语 + 保护段: 原文整体保留在首行
+{
+  const RAW = 'Check this https://github.com/a/b out please';
+  const c = runEcho(SR, RAW, T_BILINGUAL);
+  ok(c.out.indexOf('Check this https://github.com/a/b out please\n') === 0, '双语+URL: 原文行不完整, 实际=<' + c.out + '>');
+}
+// T3. cache_on=false 必须真的关闭缓存: 不读也不写
+{
+  const c = runEcho(SR, 'A fresh untranslated sentence', { enabled: true, target_lang: 'zh-CN', cache_on: false, engine: 'google' });
+  ok(c.store['TranslateCache'] === undefined, 'cache_off: 仍然写了 TranslateCache');
+}
+// T3b. cache_on=false 不得抹掉已有缓存
+{
+  const SEED = { TranslateCache: JSON.stringify({ 'old msg here': '旧译文' }) };
+  const c = runEcho(SR, 'A fresh untranslated sentence', { enabled: true, target_lang: 'zh-CN', cache_on: false, engine: 'google' }, { seed: SEED });
+  if (c.store['TranslateCache'] !== undefined) {
+    ok(c.store['TranslateCache'].indexOf('旧译文') !== -1, 'cache_off: 把已有缓存覆盖成空了');
+  } else {
+    ok(true, 'cache_off: 保留已有缓存(未写)');
+  }
+}
+// T3c. cache_on=true 正常写缓存
+{
+  const c = runEcho(SR, 'Another brand new sentence', { enabled: true, target_lang: 'zh-CN', cache_on: true, engine: 'google' });
+  ok(c.store['TranslateCache'] && c.store['TranslateCache'].indexOf('TR:Another brand new sentence') !== -1, 'cache_on: 未写缓存');
+}
+// T3d. 双语模式下缓存存纯译文, 不能存「原文+译文」(否则二次命中会重复原文)
+{
+  const c = runEcho(SR, 'Cache should hold translation only', { enabled: true, target_lang: 'zh-CN', cache_on: true, engine: 'google', bilingual: true });
+  ok(c.store['TranslateCache'].indexOf('\\nTR:') === -1, '双语缓存: 存了「原文+译文」, 二次命中会重复原文');
+}
+// T3e. 双语 + 缓存二次命中: 不得出现三段原文
+{
+  const c = runEcho(SR, 'Hit cache twice please', { enabled: true, target_lang: 'zh-CN', cache_on: true, engine: 'google', bilingual: true });
+  ok(c.out.indexOf('Hit cache twice please\nTR:') === 0, '双语缓存首次: 输出异常');
+}
+
 /* ---------------- 结果 ---------------- */
 console.log('');
 if (failures.length) {

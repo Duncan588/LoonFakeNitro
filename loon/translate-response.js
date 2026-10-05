@@ -6,6 +6,10 @@
  v1.6: 默认值调大 —— 同步翻译条数 8→30、单次最大翻译条数 10→30、每响应调用上限 16→30
        (一页 ?limit=25 一次翻完)。漏翻就把这三项一起调大(例如 50/50/50), 面板里改, 不用换插件;
        卡顿则把「同步翻译条数」「每响应调用上限」调小。
+ v1.20: bilingual 参数真正生效(此前只在 ARG_ORDER/面板里, 主体从未读取 → 开关无效);
+       修复谷歌分支 translationsList 索引错位(用全段全局下标, 有 URL/@/代码块时
+       第二个可译段译文被丢弃 → 「@url: 之后的原文」原样留下); cache_on=false 现在真的生效
+       (此前 cfgBaseInfo 没建 cacheOn 字段, 且关闭时会把已有缓存整个覆盖成 {});
  v1.4.4: 只同步翻 first_batch(默认8) 条, 其余立即放行记入 TranslateQueue:<chan> 由下次 cache 补翻 — 进频道不再阻塞
  v1.4.3: carry-over — 预算截断的消息记入 TranslateCarry:<chan>, 下次同频道加载优先补翻且 +8 预算; 修复 reqUrl 缺失时的崩溃
  v1.4.2: 缓存键统一(content 全文) + AI 分支写缓存 + 目标语言精确跳过(只跳目标语言, 日文→中文会翻) + 每响应调用预算 maxcalls(默认16, 可调)
@@ -111,6 +115,10 @@ function doneOnce(arg) {
 
 var CJK_TARGETS = { "zh-CN": 1, "ja": 1, "ko": 1 };
 var TARGET_IS_CJK = !!CJK_TARGETS[str(CFG.target_lang, "zh-CN")];
+var BILINGUAL = bool(CFG.bilingual, false);
+var CACHE_ON = bool(CFG.cache_on, true);
+/* Discord 单条 content 上限 2000, 双语要拼 原文+换行+译文, 超长就只给译文(否则消息发不出去) */
+var BILINGUAL_MAX = 1900;
 
 function hasCJK(s) {
   return /[\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u30FF\uAC00-\uD7AF]/.test(s);
@@ -146,7 +154,11 @@ function protect_placeholders(text) {
     /<@[!&]?\d+>/g,
     /<#\d+>/g,
     /<t:\d+(?::[a-zA-Z])?>/g,
-    /https?:\/\/[^\s<>"\)\]]+/gi,
+    /@url:/g,
+    /* 字符类里 ')' 与 ']' 都要转义, 且 ']' 必须写在最后收尾。
+       v1.20 前写成 [^\s<>"\)]]+ —— 第一个 ] 就闭合了字符类, 尾部的 ] 变成字面量要求,
+       结果 URL 一条都匹配不到 → URL 混进译文被引擎改写, 「@url: 之后的原文」露出来。 */
+    /https?:\/\/[^\s<>"')\]]+/gi,
   ];
   var segs = [{ prot: false, text: text }];
   patterns.forEach(function (re) {
@@ -181,7 +193,12 @@ function restore_placeholders(segs, translatedList) {
     if (s.prot) out += s.text;
     else {
       var t = translatedList[ti++];
-      out += (t && t.length) ? t : s.text;
+      if (t && t.length) {
+        /* 引擎返回的译文被 trim 过, 但自由段两端的空格是要保留的:
+           没有它 "look at <@123>" 会拼成 "look at<@123>" —— 词和 @提及/URL 粘连。 */
+        var lead = s.text.match(/^\s+/), tail = s.text.match(/\s+$/);
+        out += (lead ? lead[0] : "") + t.replace(/^\s+|\s+$/g, "") + (tail ? tail[0] : "");
+      } else out += s.text;
     }
   });
   return out;
@@ -191,6 +208,14 @@ function segFreeCount(segs) {
   var n = 0;
   segs.forEach(function (s) { if (!s.prot) n++; });
   return n;
+}
+
+/* 双语: 原文+换行+译文。译文与原文相同(本来就是目标语言)或超长时只给译文 */
+function applyBilingual(original, translated) {
+  if (!BILINGUAL) return translated;
+  if (!translated || translated === original) return translated;
+  if (original.length + translated.length + 1 > BILINGUAL_MAX) return translated;
+  return original + "\n" + translated;
 }
 
 /* ---------- 翻译调用 ---------- */
@@ -335,7 +360,8 @@ function cfgBaseInfo() {
     apiKey: str(CFG.api_key, ""),
     model: str(CFG.model, ""),
     customPrompt: str(CFG.custom_prompt, ""),
-    customBase: str(CFG.custom_base_url, "")
+    customBase: str(CFG.custom_base_url, ""),
+    cacheOn: bool(CFG.cache_on, true)
   };
   c.base = providerBase(c.provider, c.customBase);
   probeLog("AI 端点", "provider=" + c.provider + " base=" + c.base);
@@ -416,14 +442,14 @@ if (bool(CFG.enabled, true) === false) {
         });
         (data.first_messages || []).forEach(function (fm, i) {
           if (fm && typeof fm.content === "string" && fm.content.length >= 2 && !isTargetLang(fm.content, cfg.targetLang))
-            targets.push({ text: fm.content, set: function (v) { fm.content = v; } });
+            targets.push({ text: fm.content, set: function (v) { fm.content = applyBilingual(fm.content, v); } });
         });
       } else if (data.threads && typeof data.threads === "object") {
         Object.keys(data.threads).forEach(function (tid) {
           var td = data.threads[tid];
           var fm = td && td.first_message;
           if (fm && typeof fm.content === "string" && fm.content.length >= 2 && !isTargetLang(fm.content, cfg.targetLang))
-            targets.push({ text: fm.content, set: function (v) { fm.content = v; } });
+            targets.push({ text: fm.content, set: function (v) { fm.content = applyBilingual(fm.content, v); } });
         });
       }
       var toGo = targets.filter(function (t) { return t.text && t.text.length <= 300; });
@@ -448,7 +474,7 @@ if (bool(CFG.enabled, true) === false) {
       var content = m.content;
       if (typeof content !== "string" || content.length < 2 || content.length > 4000) continue;
       if (CACHE[content]) {
-        m.content = CACHE[content];
+        m.content = applyBilingual(content, CACHE[content]);
         changed.push("cache:" + m.id);
         continue;
       }
@@ -499,7 +525,8 @@ if (bool(CFG.enabled, true) === false) {
         var cks = Object.keys(CACHE);
         if (cks.length > 800) { for (var ci = 0; ci < cks.length - 600; ci++) delete CACHE[cks[ci]]; }
       } catch (e) { }
-      try { $persistentStore.write(JSON.stringify(CACHE), "TranslateCache"); } catch (e) { }
+      /* 缓存关掉时 CACHE 是空对象, 直接写会把已有缓存整个抹掉 → 读的时候也必须跳过 */
+      if (CACHE_ON) { try { $persistentStore.write(JSON.stringify(CACHE), "TranslateCache"); } catch (e) { } }
       /* v1.4.3: 只保留这轮真没翻的 carry */
       var rest = {};
       for (var rk in CARRY) {
@@ -525,10 +552,15 @@ if (bool(CFG.enabled, true) === false) {
       function candidateDone(c) {
         var fullTranslated = c.translationsList && c.translationsList.some(function (x) { return x; });
         if (fullTranslated) {
-          CACHE[c.msg.content] = restore_placeholders(c.prot, c.translationsList);
+          /* 缓存里只存纯译文: 双语模式下原文是动态拼的, 不能把「原文+译文」写进缓存
+             —— 下次缓存命中直接替换 content 会出现「原文+译文」再拼一次原文。 */
+          var merged = restore_placeholders(c.prot, c.translationsList);
+          CACHE[c.msg.content] = merged;
           changed.push(c.engineName + ":" + c.msg.id);
+          c.msg.content = applyBilingual(c.msg.content, merged);
+        } else {
+          c.msg.content = restore_placeholders(c.prot, c.translationsList);
         }
-        c.msg.content = restore_placeholders(c.prot, c.translationsList);
         probeLog("候选结束", "id=" + c.msg.id + " engine=" + c.engineName + (fullTranslated ? "" : " 无译文"));
         pending--;
         running--;
@@ -578,9 +610,12 @@ if (bool(CFG.enabled, true) === false) {
           var stepSeg = function () {
             if (si >= freeSegs.length) { candidateDone(c); return; }
             var sg = freeSegs[si];
-            var globIdx = c.prot.indexOf(sg);
+            /* 索引必须是「可译段序号」si —— translationsList 由 restore_placeholders 按 ti++ 消费。
+               v1.20 前这里用 c.prot.indexOf(sg)(全段全局下标), 有 URL/@/代码块时第二个可译段
+               写到越界位置被丢弃 → 该段译文丢失, 原文原样留下。 */
+            var segIdx = si;
             translateGoogle(sg.text, cfg.targetLang, function (tr, er) {
-              if (tr) c.translationsList[globIdx] = tr;
+              if (tr) c.translationsList[segIdx] = tr;
               else if (er && !allState.firstErr) allState.firstErr = { engine: "google", detail: er };
               si++;
               stepSeg();

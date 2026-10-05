@@ -4,8 +4,8 @@ Discord iOS 增强插件套件 — 两个独立插件,Loon / Shadowrocket 双支
 
 | 插件 | 功能 | Loon | Shadowrocket |
 |---|---|---|---|
-| **Discord Translate** (v1.5) | 消息/论坛标题/首楼实时翻译,谷歌免费+AI 双引擎,双语,秒开不卡滑 | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=loon%3A%2F%2Fimport%3Fplugin%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252FDiscord.Translate.plugin) | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=shadowrocket%3A%2F%2Finstall%3Fmodule%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252FDiscord.Translate.module) |
-| **Fake Nitro** (v1.5) | 资料页 Nitro 伪装:premium_type=2 + NITRO 徽章 + entitlements 注入 | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=loon%3A%2F%2Fimport%3Fplugin%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252Ffake-nitro.plugin) | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=shadowrocket%3A%2F%2Finstall%3Fmodule%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252Ffake-nitro.module) |
+| **Discord Translate** | 消息/论坛标题/首楼实时翻译,谷歌免费+AI 双引擎,双语,秒开不卡滑 | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=loon%3A%2F%2Fimport%3Fplugin%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252FDiscord.Translate.plugin) | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=shadowrocket%3A%2F%2Finstall%3Fmodule%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252FDiscord.Translate.module) |
+| **Fake Nitro** | 资料页 Nitro 伪装:premium_type=2 + NITRO 徽章 + entitlements 注入 | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=loon%3A%2F%2Fimport%3Fplugin%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252Ffake-nitro.plugin) | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=shadowrocket%3A%2F%2Finstall%3Fmodule%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252Ffake-nitro.module) |
 
 > 点击安装 → 进入中转跳转,自动拉起对应 App 完成安装。链接是普通 https,#GitHub 不会过滤。
 
@@ -68,14 +68,15 @@ assets/                      图标
 | **每响应调用上限** | 30 | 单次加载最多多少条翻译请求,防打爆 Loon |
 | **单次最大翻译条数** | 30 | 一次响应最多翻几条消息 |
 | **并发数** | 自动 | 同时进行的翻译请求数(留空:AI 4 / 谷歌 8);卡顿可调小 |
-| 双语模式 | 关 | 显示原文+译文 |
-| 翻译缓存 | 开 | 相同内容命中缓存直接出中文,不重复调接口 |
+| 双语模式 | 关 | 显示原文+换行+译文。原文+译文超 1900 字时只给译文(Discord 单条上限 2000) |
+| 翻译缓存 | 开 | 相同内容命中缓存直接出中文,不重复调接口。关闭后不再读写缓存(已有缓存保留) |
 | 链路探针日志 / 调试 | 关 | 排查问题才开 |
 
 > **漏翻就把参数调大**:把「同步翻译条数」「单次最大翻译条数」「每响应调用上限」三项**一起**调大(例如 50 / 50 / 50),
 > 面板里改即可,不用重装插件。反过来卡顿就把「每响应调用上限」调小。
 
 ### 版本历史
+- **v1.20**: 双语模式真正生效(此前开关是空壳);修复「`@url:`/URL 之后的原文不翻译」——URL 保护正则字符类写坏导致 URL 从未被保护 + 多可译段时译文索引错位;修复自由段两端空格被 trim 造成文字与 @提及/URL 粘连;修复「翻译缓存=关」不生效且会清空已有缓存
 - **v1.5**: 同步翻译条数默认 8→30(整页同步,不再只翻第一屏);漏翻时三项一起调大
 - **v1.4**: 默认值调大 —— 单次最大翻译条数 10→30、每响应调用上限 16→30(一页 25 条一次翻完);漏翻时把这两项一起调大
 - **v1.3**: 翻译请求改为有界并发(留空 AI 4 / 谷歌 8,可调),缓存自动裁剪(上限 800 条),谷歌端点超时 10s→6s

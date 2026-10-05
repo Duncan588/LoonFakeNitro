@@ -1,5 +1,5 @@
 #!name = Discord Translate
-#!desc = Discord 实时翻译 V1.19
+#!desc = Discord 实时翻译 V1.20
 #!author = DiscordLoon
 #!homepage = https://github.com/Duncan588/LoonFakeNitro
 #!icon = https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/assets/discord-translate.jpg
@@ -28,9 +28,9 @@ first_batch = input,30,tag=同步翻译条数,desc=进入频道时同步翻译�
 concurrency = input,,tag=并发数,desc=同时进行的翻译请求数。留空自动(AI 4 / 谷歌 8);卡顿可调小
 
 [Script]
-http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/messages script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/translate-response.js?v=1109,requires-body=true,timeout=30,tag=Translate 响应,enable={enabled},argument=[{enabled},{probe},{debug},{target_lang},{engine},{provider},{api_key},{model},{custom_base_url},{cache_on},{maxmsgs},{maxcalls},{first_batch},{bilingual},{custom_prompt},{concurrency}]
-http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/threads\/search script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/translate-response.js?v=1109,requires-body=true,timeout=30,tag=Translate 论坛搜索,enable={enabled},argument=[{enabled},{probe},{debug},{target_lang},{engine},{provider},{api_key},{model},{custom_base_url},{cache_on},{maxmsgs},{maxcalls},{first_batch},{bilingual},{custom_prompt},{concurrency}]
-http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/post-data script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/translate-response.js?v=1109,requires-body=true,timeout=30,tag=Translate 论坛首楼,enable={enabled},argument=[{enabled},{probe},{debug},{target_lang},{engine},{provider},{api_key},{model},{custom_base_url},{cache_on},{maxmsgs},{maxcalls},{first_batch},{bilingual},{custom_prompt},{concurrency}]
+http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/messages script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/translate-response.js?v=1120,requires-body=true,timeout=30,tag=Translate 响应,enable={enabled},argument=[{enabled},{probe},{debug},{target_lang},{engine},{provider},{api_key},{model},{custom_base_url},{cache_on},{maxmsgs},{maxcalls},{first_batch},{bilingual},{custom_prompt},{concurrency}]
+http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/threads\/search script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/translate-response.js?v=1120,requires-body=true,timeout=30,tag=Translate 论坛搜索,enable={enabled},argument=[{enabled},{probe},{debug},{target_lang},{engine},{provider},{api_key},{model},{custom_base_url},{cache_on},{maxmsgs},{maxcalls},{first_batch},{bilingual},{custom_prompt},{concurrency}]
+http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/post-data script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/translate-response.js?v=1120,requires-body=true,timeout=30,tag=Translate 论坛首楼,enable={enabled},argument=[{enabled},{probe},{debug},{target_lang},{engine},{provider},{api_key},{model},{custom_base_url},{cache_on},{maxmsgs},{maxcalls},{first_batch},{bilingual},{custom_prompt},{concurrency}]
 
 
 [Mitm]
