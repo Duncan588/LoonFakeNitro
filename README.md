@@ -47,9 +47,8 @@ assets/                      图标
 1. **配置 → HTTPS 解密** → 生成 CA → 安装 → 系统设置里信任该证书(不信任的话含 MITM 的模块不生效)
 2. **配置 → 模块** → 右上角 **➕** → 填模块链接(表格里 Shadowrocket 那格的链接,或直接填 `releases/latest/download/Discord.Translate.module`)→ 下载
 3. **全局路由设为「配置」** —— 含规则/脚本的模块只在「配置」模式下生效
-4. 改参数:点开模块,改每条规则 `argument=` 后面的 **`k=v`,多项用 `&` 连接**
-   `argument=enabled=true&target_lang=zh-CN&engine=auto&maxmsgs=30&maxcalls=30&first_batch=30`
-   ⚠️ **不要写成 JSON**(`{...}`)——逗号会把这一行的属性切碎,整条规则失效
+4. 改参数:**配置 → 模块 → 点击本模块 → 「编辑参数」**,按需填写后保存(自定义值存本地 `.meta`,模块更新不丢)
+   也可手动改规则 `argument=` 里的 **`k=v`,多项用 `&` 连接**;⚠️ **不要写成 JSON**(`{...}`)——逗号会把这一行的属性切碎,整条规则失效
 5. 杀掉 Discord 重开
 
 > **看日志**:Shadowrocket → **数据 → 代理 → 启用日志记录**,产生流量后回到 **数据 → 代理** 看日志;

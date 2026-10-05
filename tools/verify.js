@@ -131,6 +131,30 @@ for (const [a, b] of PAIRS) {
     ok(sameSet(keys, argOrder), 'Shadowrocket 规则 k=v 与 ARG_ORDER 不一致: ' + keys.join(','));
   }
   eq(kvRules, 3, 'Shadowrocket 翻译规则数(argument=k=v)');
+
+  /* SR 可视化参数面板: #!arguments 声明 <-> 正文 {{{占位符}}} <-> ARG_ORDER (SR 官方「编辑参数」机制) */
+  {
+    const decl = (modText.match(/^#!arguments=(.*)$/m) || [])[1];
+    ok(!!decl, 'Shadowrocket 模块缺 #!arguments 声明(可视化「编辑参数」面板不显示)');
+    const declNames = decl ? decl.split(',').map(p => p.split(':')[0].trim()).filter(Boolean) : [];
+    // 只扫非注释行;收集 argument= 里的 k={{{显示名}}} 配对(内部键 <-> 面板显示名的真实映射)
+    const pairs = [];
+    for (const line of modText.split('\n')) {
+      const s = line.trim();
+      if (!s || s.startsWith('#')) continue;
+      if (!/type=http-(?:response|request)/.test(s)) continue;
+      const a = (s.match(/argument=(.*)$/) || [])[1];
+      if (a === undefined) continue;
+      for (const m of a.matchAll(/([A-Za-z0-9_]+)=\{\{\{([^}]+)\}\}\}/g)) pairs.push([m[1], m[2].trim()]);
+      ok(a.indexOf('{{{') !== -1, 'Shadowrocket 规则 argument 应使用 {{{参数}}} 占位符(可视化面板才生效): ' + s.slice(0, 60));
+    }
+    const keys = [...new Set(pairs.map(p => p[0]))];
+    const names = [...new Set(pairs.map(p => p[1]))];
+    ok(names.length > 0, 'Shadowrocket 模块正文没有 {{{参数}}} 占位符(面板改了不生效)');
+    ok(sameSet(keys, argOrder), 'argument 里 k={{{名}}} 的内部键与 ARG_ORDER 不一致:\n      键=' + keys.join(',') + '\n      ARG_ORDER=' + argOrder.join(','));
+    ok(sameSet(names, declNames), '#!arguments 显示名与 argument 占位符不一致:\n      arguments=' + declNames.join(',') + '\n      占位符=' + names.join(','));
+    eq(pairs.length, argOrder.length * 3, 'k={{{名}}} 配对总数应为 参数数×3 条规则, 实际 ' + pairs.length);
+  }
 }
 
 /* ---------------- 3. pattern 正则自检 ---------------- */
@@ -225,8 +249,10 @@ for (const file of ['Shadowrocket/Discord.Translate.module', 'Shadowrocket/fake-
     const arg = (s.match(/argument=(.*)$/) || [])[1];
     if (arg !== undefined) {
       // Shadowrocket 的 argument 是 k=v&k=v;出现 {} 或 , 会把这一行的属性切碎
-      ok(arg.indexOf('{') === -1 && arg.indexOf('}') === -1,
-        file + ' argument 里不能有花括号(Shadowrocket 用 k=v&k=v,不是 JSON)');
+      // {{{参数}}} 占位符(可视化「编辑参数」面板)是唯一合法的花括号, 剥掉后再查
+      const stripped = arg.replace(/\{\{\{[^}]*\}\}\}/g, 'PH');
+      ok(stripped.indexOf('{') === -1 && stripped.indexOf('}') === -1,
+        file + ' argument 里不能有花括号(除 {{{参数}}} 占位符外;Shadowrocket 用 k=v&k=v,不是 JSON)');
       ok(arg.indexOf(',') === -1 || false,
         file + ' argument 里不能有逗号(会切碎属性行)');
       const pairs = arg.split('&').filter(Boolean);
