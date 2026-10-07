@@ -1,7 +1,8 @@
 /*
  Discord FakeNitro catalog v1.11.0 — Loon 响应侧: 表情目录采集 + 黑名单消息过滤(分页不断档)
- 规则( http-response, requires-body ):
-  ^https?:\/\/discord(app)?\.com\/api\/v\d+\/(guilds\/\d+\/(top-emojis|emojis)|channels\/\d+\/messages|emojis)
+ 当前插件规则只注册目录端点( http-response, requires-body ):
+  ^https?:\/\/discord(app)?\.com\/api\/v\d+\/(guilds\/\d+\/(top-emojis|emojis)|emojis)
+ 脚本仍保留 messages 过滤实现供回归与旧安装兼容; /messages 的新入口已合入 translate-response.js。
  功能:
   1) 采集 name -> {id, animated} 存 $persistentStore("fakenitro_emoji_catalog")
   2) 消息数组响应里删除黑名单作者的消息(含 referenced_message/message_reference)
