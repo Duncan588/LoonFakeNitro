@@ -9,11 +9,7 @@
  v1.20: bilingual 参数真正生效(此前只在 ARG_ORDER/面板里, 主体从未读取 → 开关无效);
        修复谷歌分支 translationsList 索引错位(用全段全局下标, 有 URL/@/代码块时
        第二个可译段译文被丢弃 → 「@url: 之后的原文」原样留下); cache_on=false 现在真的生效
-        (此前 cfgBaseInfo 没建 cacheOn 字段, 且关闭时会把已有缓存整个覆盖成 {});
- v1.21: 与 FakeNitro 目录脚本合并 —— Loon 对同一条响应只执行一条 Response Script(按配置顺序取第一条
-        命中的), 两个插件都注册了 /messages 响应脚本, 谁在前面谁生效 → 翻译整条不执行。现在
-        /messages 只由本脚本处理: 先采表情目录、再按黑名单过滤/补页, 最后翻译, 全程只 $done 一次。
-        新增参数 manual_ids / block_server(原属 FakeNitro 面板)。
+       (此前 cfgBaseInfo 没建 cacheOn 字段, 且关闭时会把已有缓存整个覆盖成 {});
  v1.4.4: 只同步翻 first_batch(默认8) 条, 其余立即放行记入 TranslateQueue:<chan> 由下次 cache 补翻 — 进频道不再阻塞
  v1.4.3: carry-over — 预算截断的消息记入 TranslateCarry:<chan>, 下次同频道加载优先补翻且 +8 预算; 修复 reqUrl 缺失时的崩溃
  v1.4.2: 缓存键统一(content 全文) + AI 分支写缓存 + 目标语言精确跳过(只跳目标语言, 日文→中文会翻) + 每响应调用预算 maxcalls(默认16, 可调)
@@ -25,8 +21,7 @@
 var ARG_ORDER = [
   "enabled", "probe", "debug", "target_lang", "engine", "provider",
   "api_key", "model", "custom_base_url",
-  "cache_on", "maxmsgs", "maxcalls", "first_batch", "bilingual", "custom_prompt", "concurrency",
-  "manual_ids", "block_server"
+  "cache_on", "maxmsgs", "maxcalls", "first_batch", "bilingual", "custom_prompt", "concurrency"
 ];
 
 function bool(v, dflt) {
@@ -356,260 +351,6 @@ function translateGoogle(text, targetLang, done) {
   tryNext();
 }
 
-/* ---------- FakeNitro 消息侧(合并到 /messages 的唯一响应脚本) ---------- */
-var CAT_KEY = "fakenitro_emoji_catalog";
-var BL_KEY = "discord_blocked_users";
-var FETCH_LIMIT = 100;
-var MAX_FETCH = 4;
-var BUDGET_MS = 12000;
-
-function toSet(list) {
-  var set = {};
-  for (var i = 0; i < list.length; i++) set[String(list[i])] = 1;
-  return set;
-}
-
-function getBlockedSet() {
-  var list = [];
-  try {
-    var raw = $persistentStore.read(BL_KEY);
-    if (raw) list = JSON.parse(raw) || [];
-  } catch (e) { }
-  var manual = str(CFG.manual_ids, "");
-  if (manual) {
-    manual.split(/[,;\s]+/).forEach(function (x) {
-      x = x.replace(/^\s+|\s+$/g, "");
-      if (/^\d{15,21}$/.test(x)) list.push(x);
-    });
-  }
-  return toSet(list);
-}
-
-var BL_SERVERS = (function () {
-  var v = str(CFG.block_server, "");
-  if (!v) return [];
-  return v.split(/[,;\s]+/).filter(function (s) { return /^https?:\/\//.test(s); });
-})();
-
-function tryServers(idx, cb) {
-  if (typeof $httpClient === "undefined" || idx >= BL_SERVERS.length) {
-    log("黑名单", "服务器不可用, 回落本地");
-    cb(null);
-    return;
-  }
-  $httpClient.get({
-    url: BL_SERVERS[idx],
-    node: "DIRECT",
-    timeout: 3,
-    headers: { "User-Agent": "LoonBlockSync/1.0" }
-  }, function (err, resp, data) {
-    var arr = null;
-    try {
-      var list = JSON.parse(data);
-      if (Array.isArray(list)) arr = list;
-    } catch (e) { }
-    if (!err && arr) {
-      try { $persistentStore.write(JSON.stringify(arr), BL_KEY); } catch (e2) { }
-      log("黑名单", "服务器同步 " + arr.length + " 条");
-      cb(toSet(arr));
-    } else {
-      log("黑名单", "服务器失败 " + (err ? String(err) : ("status " + (resp && resp.status))));
-      tryServers(idx + 1, cb);
-    }
-  });
-}
-
-function fetchServerBlocklist(cb) {
-  tryServers(0, cb);
-}
-
-function idCmp(a, b) {
-  a = String(a); b = String(b);
-  if (a.length !== b.length) return a.length < b.length ? -1 : 1;
-  return a < b ? -1 : (a > b ? 1 : 0);
-}
-
-function isBlocked(m, bset) {
-  var a = (m && m.author && m.author.id) ? String(m.author.id) : "";
-  return !!(a && bset[a]);
-}
-
-function visible(arr, bset) {
-  var out = [];
-  for (var i = 0; i < arr.length; i++) {
-    if (!isBlocked(arr[i], bset)) out.push(arr[i]);
-  }
-  return out;
-}
-
-function scrubReplies(arr, bset) {
-  var n = 0;
-  for (var i = 0; i < arr.length; i++) {
-    var m = arr[i];
-    if (m && m.referenced_message && isBlocked(m.referenced_message, bset)) {
-      delete m.referenced_message;
-      delete m.message_reference;
-      n++;
-    }
-  }
-  return n;
-}
-
-function mask(m) {
-  var c = JSON.parse(JSON.stringify(m));
-  c.content = "[已屏蔽]";
-  c.attachments = [];
-  c.embeds = [];
-  c.sticker_items = [];
-  c.stickers = [];
-  c.reactions = [];
-  return c;
-}
-
-function fetchBefore(cursor, cb) {
-  var h = {}, src = ($request && $request.headers) || {};
-  for (var k in src) {
-    if (!src.hasOwnProperty(k)) continue;
-    var lk = k.toLowerCase();
-    if (lk === "host" || lk === "content-length" || lk === "content-type" || lk === "accept-encoding" ||
-        lk === "connection" || lk === "if-none-match" || lk === "if-modified-since") continue;
-    h[k] = src[k];
-  }
-  var base = ($request && $request.url ? $request.url : "").split("?")[0];
-  $httpClient.get({
-    url: base + "?limit=" + FETCH_LIMIT + "&before=" + cursor + "&_bnfb=1",
-    headers: h,
-    timeout: 8
-  }, function (err, resp, data) {
-    if (err) { cb(String(err)); return; }
-    if (!resp || resp.status !== 200) { cb("status " + (resp && resp.status)); return; }
-    var arr = null;
-    try { arr = JSON.parse(data); } catch (e) { cb("parse"); return; }
-    if (!Array.isArray(arr)) { cb("not-array"); return; }
-    cb(null, arr);
-  });
-}
-
-function processMessages(d, bset, cb) {
-  var url = ($request && $request.url) || "";
-  if (!d.length) {
-    cb(d);
-    return;
-  }
-  var hasBlocked = false;
-  for (var i = 0; i < d.length; i++) {
-    if (isBlocked(d[i], bset)) { hasBlocked = true; break; }
-  }
-
-  if (!hasBlocked) {
-    scrubReplies(d, bset);
-    cb(d);
-    return;
-  }
-
-  if (/[?&](after|around)=/.test(url)) {
-    var masked = d.map(function (m) { return isBlocked(m, bset) ? mask(m) : m; });
-    scrubReplies(masked, bset);
-    log("黑名单", "after/around 占位 page=" + masked.length);
-    cb(masked);
-    return;
-  }
-
-  var lm = /[?&]limit=(\d+)/.exec(url);
-  var L = lm ? Math.max(1, parseInt(lm[1], 10) || 50) : 50;
-  var pool = d.slice();
-  var cursor = String(d[d.length - 1].id);
-  var ended = d.length < L;
-  var reqs = 0, t0 = Date.now();
-  var kept = visible(pool, bset);
-  var finished = false;
-
-  function finish(reason) {
-    if (finished) return;
-    finished = true;
-    var out, how;
-    if (kept.length >= L) {
-      out = kept.slice(0, L);
-      how = "trim";
-    } else if (ended) {
-      out = kept;
-      how = "channel-end";
-    } else {
-      out = pool.slice(0, L).map(function (m) {
-        return isBlocked(m, bset) ? mask(m) : m;
-      });
-      how = "placeholder(" + reason + ")";
-    }
-    scrubReplies(out, bset);
-    log("黑名单", "L=" + L + " pool=" + pool.length + " fetches=" + reqs + " -> " + out.length + " [" + how + "]");
-    cb(out);
-  }
-
-  function step() {
-    if (kept.length >= L || ended) { finish("ok"); return; }
-    if (reqs >= MAX_FETCH) { finish("max-fetch"); return; }
-    if (Date.now() - t0 > BUDGET_MS) { finish("budget"); return; }
-    reqs++;
-    fetchBefore(cursor, function (err, arr) {
-      try {
-        if (err) { log("黑名单", "补页失败 " + err); finish("err"); return; }
-        var n0 = arr.length;
-        if (n0 === 0) { ended = true; finish("empty"); return; }
-        arr = arr.filter(function (m) { return m && m.id && idCmp(m.id, cursor) < 0; });
-        if (!arr.length) { finish("no-progress"); return; }
-        pool = pool.concat(arr);
-        cursor = String(arr[arr.length - 1].id);
-        if (n0 < FETCH_LIMIT) ended = true;
-        kept = visible(pool, bset);
-        step();
-      } catch (e) {
-        log("黑名单", "补页异常 " + e);
-        finish("exception");
-      }
-    });
-  }
-
-  step();
-}
-
-function collectCatalog(d) {
-  var found = [];
-  (function walk(o, depth, key) {
-    if (!o || typeof o !== "object" || depth > 12) return;
-    if (Array.isArray(o)) {
-      for (var i = 0; i < o.length; i++) walk(o[i], depth + 1, key);
-      return;
-    }
-    var id = o.id, nm = o.name;
-    var looksEmoji = (typeof id === "string" && /^\d{15,21}$/.test(id)) &&
-                     (typeof nm === "string" && nm.length >= 1) &&
-                     (o.animated === true || o.animated === false ||
-                      key === "emoji" || key === "emojis" || key === "emoji_items");
-    if (looksEmoji) found.push({ name: nm, id: id, animated: !!o.animated });
-    for (var k in o) {
-      if (o.hasOwnProperty(k)) walk(o[k], depth + 1, k);
-    }
-  })(d, 0, "");
-
-  if (!found.length) return;
-  var cat = {};
-  try { cat = JSON.parse($persistentStore.read(CAT_KEY) || "{}") || {}; } catch (e) { cat = {}; }
-  var added = 0;
-  for (var i = 0; i < found.length; i++) {
-    var f = found[i];
-    if (!cat[f.name] || cat[f.name].id !== f.id) {
-      cat[f.name] = { id: f.id, animated: f.animated };
-      added++;
-    }
-  }
-  if (added) {
-    try {
-      $persistentStore.write(JSON.stringify(cat), CAT_KEY);
-      log("目录", "+" + added + " total=" + Object.keys(cat).length);
-    } catch (e2) { }
-  }
-}
-
 /* ---------- 主流程 ---------- */
 function cfgBaseInfo() {
   var c = {
@@ -656,15 +397,12 @@ var status = $response ? $response.status : 0;
 var body = bodyText($response ? $response.body : null);
 var CHID = ((typeof reqUrl === "string" && reqUrl.match(/\/channels\/(\d+)/)) || [])[1] || "c";
 probeLog("响应", "status=" + status);
-var isMessagesUrl = /\/api\/v\d+\/channels\/\d+\/messages(\?|$|\/)/i.test(reqUrl);
 
 if (bool(CFG.enabled, true) === false) {
   doneOnce({});
 } else if (!body || typeof body !== "string") {
   doneOnce({});
 } else if (!/\/api\/v\d+\/channels\/\d+\/messages(\?|$|\/)|\/api\/v\d+\/channels\/\d+\/threads\/search|\/api\/v\d+\/channels\/\d+\/post-data/i.test(reqUrl)) {
-  doneOnce({});
-} else if (isMessagesUrl && /[?&]_bnfb=1/.test(reqUrl)) {
   doneOnce({});
 } else {
   var data = null;
@@ -728,182 +466,165 @@ if (bool(CFG.enabled, true) === false) {
       return;
     }
 
-    var translateMessages = function (input) {
-      var outputData = input;
-      var cfgMax = num(CFG.maxmsgs, 30);
-      var candidates = [];
-      for (var mi = 0; mi < input.length && (cfgMax <= 0 || candidates.length < cfgMax); mi++) {
-        var m = input[mi];
-        if (!m || typeof m !== "object") continue;
-        var content = m.content;
-        if (typeof content !== "string" || content.length < 2 || content.length > 4000) continue;
-        if (content === "[已屏蔽]") continue;
-        if (CACHE[content]) {
-          m.content = applyBilingual(content, CACHE[content]);
-          changed.push("cache:" + m.id);
-          continue;
-        }
-        if (isTargetLang(content, cfg.targetLang)) continue;
-        candidates.push({ msg: m, prot: protect_placeholders(content), freeN: 0, translated: null });
-        candidates[candidates.length - 1].freeN = segFreeCount(candidates[candidates.length - 1].prot);
+    var cfgMax = num(CFG.maxmsgs, 30);
+    var candidates = [];
+    for (var mi = 0; mi < data.length && (cfgMax <= 0 || candidates.length < cfgMax); mi++) {
+      var m = data[mi];
+      if (!m || typeof m !== "object") continue;
+      var content = m.content;
+      if (typeof content !== "string" || content.length < 2 || content.length > 4000) continue;
+      if (CACHE[content]) {
+        m.content = applyBilingual(content, CACHE[content]);
+        changed.push("cache:" + m.id);
+        continue;
       }
+      if (isTargetLang(content, cfg.targetLang)) continue;
+      candidates.push({ msg: m, prot: protect_placeholders(content), freeN: 0, translated: null });
+      candidates[candidates.length - 1].freeN = segFreeCount(candidates[candidates.length - 1].prot);
+    }
 
-      /* v1.4.4: 只同步翻 first_batch 条, 其余放行并由后续响应补翻 */
-      var FIRST_BATCH = num(CFG.first_batch, 30);
-      if (FIRST_BATCH > 0 && candidates.length > FIRST_BATCH) {
-        var QUEUE = {};
-        candidates.slice(FIRST_BATCH).forEach(function (c) { QUEUE[c.msg.content] = true; });
-        try { $persistentStore.write(JSON.stringify(QUEUE), "TranslateQueue:" + CHID); } catch (e) { }
-        candidates = candidates.slice(0, FIRST_BATCH);
-      }
+    /* v1.4.4: 感知延迟根治 — 只同步翻 first_batch(默认8) 条, 其余立即放行, 由下次响应 cache 命中 */
+    var FIRST_BATCH = num(CFG.first_batch, 30);
+    if (FIRST_BATCH > 0 && candidates.length > FIRST_BATCH) {
+      // 保存未翻的 content keys 到队列, 下次的 cache 会命中
+      var QUEUE = {};
+      candidates.slice(FIRST_BATCH).forEach(function (c) { QUEUE[c.msg.content] = true; });
+      try { $persistentStore.write(JSON.stringify(QUEUE), "TranslateQueue:" + CHID); } catch (e) { }
+      candidates = candidates.slice(0, FIRST_BATCH);
+    }
 
-      /* v1.4.3: 上次截断未翻的优先 */
-      var CARRY = {};
-      try { CARRY = JSON.parse($persistentStore.read("TranslateCarry:" + CHID) || "{}") || {}; } catch (e) { }
-      var hadCarry = false;
-      for (var ck in CARRY) {
-        if (CARRY.hasOwnProperty(ck) && CARRY[ck]) { hadCarry = true; break; }
-      }
-      if (hadCarry) {
-        candidates.sort(function (a, b) {
-          var ca = a.msg.content, cb2 = b.msg.content;
-          var wa = CARRY[ca] ? 0 : 1, wb = CARRY[cb2] ? 0 : 1;
-          return wa - wb;
-        });
-      }
-      var HAS_QUEUE = false;
-      try { HAS_QUEUE = !!$persistentStore.read("TranslateQueue:" + CHID); } catch (e) { }
-      var CALL_BUDGET = num(CFG.maxcalls, 30);
-      var effBudget = CALL_BUDGET + (hadCarry ? 8 : 0) + (HAS_QUEUE ? 4 : 0);
+    /* v1.4.3: carry-over — 上次截断未翻的优先 */
+    var CARRY = {};
+    try { CARRY = JSON.parse($persistentStore.read("TranslateCarry:" + CHID) || "{}") || {}; } catch (e) { }
+    var hadCarry = false;
+    for (var ck in CARRY) { if (CARRY.hasOwnProperty(ck) && CARRY[ck]) { hadCarry = true; break; } }
+    if (hadCarry) {
+      candidates.sort(function (a, b) {
+        var ca = a.msg.content, cb2 = b.msg.content;
+        var wa = CARRY[ca] ? 0 : 1, wb = CARRY[cb2] ? 0 : 1;
+        return wa - wb;
+      });
+    }
+    var HAS_QUEUE = false;
+    try { HAS_QUEUE = !!$persistentStore.read("TranslateQueue:" + CHID); } catch (e) { }
+    var CALL_BUDGET = num(CFG.maxcalls, 30);
+    var effBudget = CALL_BUDGET + (hadCarry ? 8 : 0) + (HAS_QUEUE ? 4 : 0);
 
-      var engine = cfg.engine;
-      if (engine === "auto") engine = cfg.apiKey ? "ai" : "google";
-      var pending = candidates.length;
+    var engine = cfg.engine;
+    if (engine === "auto") engine = cfg.apiKey ? "ai" : "google";
+    var pending = candidates.length;
 
-      function allDone() {
-        if (pending > 0) return;
+    function allDone() {
+      if (pending > 0 || candidates.length === 0) { /* wait */ }
+      if (pending > 0) return;
         if (changed.length === 0 && allState.firstErr) {
           probeLog("AI配置失败", "engine=" + allState.firstErr.engine + " " + allState.firstErr.detail);
-          try { $notification.post("Discord Translate", "", "AI配置失败: " + allState.firstErr.detail); } catch (ne) { }
         }
-        try {
-          var cks = Object.keys(CACHE);
-          if (cks.length > 800) { for (var ci = 0; ci < cks.length - 600; ci++) delete CACHE[cks[ci]]; }
-        } catch (e) { }
-        /* 缓存关掉时 CACHE 是空对象, 直接写会把已有缓存整个抹掉 → 读的时候也必须跳过 */
-        if (CACHE_ON) { try { $persistentStore.write(JSON.stringify(CACHE), "TranslateCache"); } catch (e) { } }
-        /* v1.4.3: 只保留这轮真没翻的 carry */
-        var rest = {};
-        for (var rk in CARRY) {
-          if (CARRY.hasOwnProperty(rk) && !CACHE[rk]) rest[rk] = true;
-        }
-        try { $persistentStore.write(JSON.stringify(rest), "TranslateCarry:" + CHID); } catch (e) { }
-        log("处理完成", { changed: changed });
-        doneOnce({ body: JSON.stringify(outputData) });
+      try {
+        var cks = Object.keys(CACHE);
+        if (cks.length > 800) { for (var ci = 0; ci < cks.length - 600; ci++) delete CACHE[cks[ci]]; }
+      } catch (e) { }
+      /* 缓存关掉时 CACHE 是空对象, 直接写会把已有缓存整个抹掉 → 读的时候也必须跳过 */
+      if (CACHE_ON) { try { $persistentStore.write(JSON.stringify(CACHE), "TranslateCache"); } catch (e) { } }
+      /* v1.4.3: 只保留这轮真没翻的 carry */
+      var rest = {};
+      for (var rk in CARRY) {
+        if (CARRY.hasOwnProperty(rk) && !CACHE[rk]) rest[rk] = true;
       }
+      try { $persistentStore.write(JSON.stringify(rest), "TranslateCarry:" + CHID); } catch (e) { }
+      log("处理完成", { changed: changed });
+      doneOnce({ body: JSON.stringify(data) });
+    }
 
-      if (!candidates.length) {
-        log("无候选", { changed: changed });
-        doneOnce({ body: JSON.stringify(outputData) });
-      } else {
-        var callCount = 0;
-        var CONC = Math.max(1, num(CFG.concurrency, engine === "ai" ? 4 : 8));
-        var nextIdx = 0, running = 0;
+    if (!candidates.length) {
+      log("无候选", { changed: changed });
+      doneOnce({ body: JSON.stringify(data) });
+    } else {
+      var CALL_BUDGET = num(CFG.maxcalls, 30);      // 每次响应最多发起的网络调用数
+      var callCount = 0;
+      var pending = candidates.length;
+      var segIdxStack = null;
 
-        function candidateDone(c) {
-          var fullTranslated = c.translationsList && c.translationsList.some(function (x) { return x; });
-          if (fullTranslated) {
-            /* 缓存里只存纯译文: 双语模式下原文是动态拼的, 不能把「原文+译文」写进缓存
-               —— 下次缓存命中直接替换 content 会出现「原文+译文」再拼一次原文。 */
-            var merged = restore_placeholders(c.prot, c.translationsList);
-            CACHE[c.msg.content] = merged;
-            changed.push(c.engineName + ":" + c.msg.id);
-            c.msg.content = applyBilingual(c.msg.content, merged);
-          } else {
-            c.msg.content = restore_placeholders(c.prot, c.translationsList);
-          }
-          probeLog("候选结束", "id=" + c.msg.id + " engine=" + c.engineName + (fullTranslated ? "" : " 无译文"));
-          pending--;
-          running--;
-          pump();
+      var CONC = Math.max(1, num(CFG.concurrency, engine === "ai" ? 4 : 8));
+      var nextIdx = 0, running = 0;
+
+      function candidateDone(c) {
+        var fullTranslated = c.translationsList && c.translationsList.some(function (x) { return x; });
+        if (fullTranslated) {
+          /* 缓存里只存纯译文: 双语模式下原文是动态拼的, 不能把「原文+译文」写进缓存
+             —— 下次缓存命中直接替换 content 会出现「原文+译文」再拼一次原文。 */
+          var merged = restore_placeholders(c.prot, c.translationsList);
+          CACHE[c.msg.content] = merged;
+          changed.push(c.engineName + ":" + c.msg.id);
+          c.msg.content = applyBilingual(c.msg.content, merged);
+        } else {
+          c.msg.content = restore_placeholders(c.prot, c.translationsList);
         }
-
-        /* 有界并发: 同时最多 CONC 条候选在翻, 不再逐条串行 */
-        function pump() {
-          if (pending === 0) { allDone(); return; }
-          while (running < CONC && nextIdx < candidates.length) {
-            var cc = candidates[nextIdx++];
-            running++;
-            startCandidate(cc);
-          }
-        }
-
-        function startCandidate(c) {
-          c._done = true;
-          if (callCount >= effBudget) {
-            CARRY[c.msg.content] = true;
-            probeLog("预算", "已达上限 " + effBudget + ", 记入 carry");
-            c.translationsList = new Array(c.freeN);
-            candidateDone(c);
-            return;
-          }
-          var freeSegs = c.prot.filter(function (s) { return !s.prot; });
-          c.translationsList = new Array(c.freeN);
-          var engineName = engine === "ai" && cfg.apiKey ? "ai" : "google";
-          c.engineName = engineName;
-          callCount++;
-          if (engineName === "ai") {
-            var joined = freeSegs.map(function (s) { return s.text; }).join("\n\n@@SEG@@\n\n");
-            translateAI(joined, cfg.targetLang, cfg, function (tr, er) {
-              if (er && !allState.firstErr) allState.firstErr = { engine: "ai", detail: er };
-              if (tr) {
-                var parts = tr.split("@@SEG@@");
-                if (parts.length === c.freeN) {
-                  for (var p = 0; p < c.freeN; p++) c.translationsList[p] = parts[p].trim();
-                } else {
-                  for (var p2 = 0; p2 < c.freeN; p2++) c.translationsList[p2] = tr;
-                }
-              }
-              candidateDone(c);
-            });
-          } else {
-            var si = 0;
-            var stepSeg = function () {
-              if (si >= freeSegs.length) { candidateDone(c); return; }
-              var sg = freeSegs[si];
-              /* 索引必须是「可译段序号」si —— translationsList 由 restore_placeholders 按 ti++ 消费。
-                 v1.20 前这里用 c.prot.indexOf(sg)(全段全局下标), 有 URL/@/代码块时第二个可译段
-                 写到越界位置被丢弃 → 该段译文丢失, 原文原样留下。 */
-              var segIdx = si;
-              translateGoogle(sg.text, cfg.targetLang, function (tr, er) {
-                if (tr) c.translationsList[segIdx] = tr;
-                else if (er && !allState.firstErr) allState.firstErr = { engine: "google", detail: er };
-                si++;
-                stepSeg();
-              });
-            };
-            stepSeg();
-          }
-        }
-
+        probeLog("候选结束", "id=" + c.msg.id + " engine=" + c.engineName + (fullTranslated ? "" : " 无译文"));
+        pending--;
+        running--;
         pump();
       }
-    };
 
-    if (isMessagesUrl) {
-      collectCatalog(data);
-      fetchServerBlocklist(function (srvSet) {
-        try {
-          processMessages(data, srvSet || getBlockedSet(), function (filtered) {
-            translateMessages(filtered);
-          });
-        } catch (e) {
-          log("黑名单", "处理异常 " + e);
-          translateMessages(data);
+      /* 有界并发: 同时最多 CONC 条候选在翻, 不再逐条串行 */
+      function pump() {
+        if (pending === 0) { allDone(); return; }
+        while (running < CONC && nextIdx < candidates.length) {
+          var cc = candidates[nextIdx++];
+          running++;
+          startCandidate(cc);
         }
-      });
-    } else {
-      translateMessages(data);
+      }
+
+      function startCandidate(c) {
+        c._done = true;
+        if (callCount >= effBudget) {
+          CARRY[c.msg.content] = true;
+          probeLog("预算", "已达上限 " + effBudget + ", 记入 carry");
+          c.translationsList = new Array(c.freeN);
+          candidateDone(c);
+          return;
+        }
+        var freeSegs = c.prot.filter(function (s) { return !s.prot; });
+        c.translationsList = new Array(c.freeN);
+        var engineName = engine === "ai" && cfg.apiKey ? "ai" : "google";
+        c.engineName = engineName;
+        callCount++;
+        if (engineName === "ai") {
+          var joined = freeSegs.map(function (s) { return s.text; }).join("\n\n@@SEG@@\n\n");
+          translateAI(joined, cfg.targetLang, cfg, function (tr, er) {
+            if (er && !allState.firstErr) allState.firstErr = { engine: "ai", detail: er };
+            if (tr) {
+              var parts = tr.split("@@SEG@@");
+              if (parts.length === c.freeN) {
+                for (var p = 0; p < c.freeN; p++) c.translationsList[p] = parts[p].trim();
+              } else {
+                for (var p2 = 0; p2 < c.freeN; p2++) c.translationsList[p2] = tr;
+              }
+            }
+            candidateDone(c);
+          });
+        } else {
+          var si = 0;
+          var stepSeg = function () {
+            if (si >= freeSegs.length) { candidateDone(c); return; }
+            var sg = freeSegs[si];
+            /* 索引必须是「可译段序号」si —— translationsList 由 restore_placeholders 按 ti++ 消费。
+               v1.20 前这里用 c.prot.indexOf(sg)(全段全局下标), 有 URL/@/代码块时第二个可译段
+               写到越界位置被丢弃 → 该段译文丢失, 原文原样留下。 */
+            var segIdx = si;
+            translateGoogle(sg.text, cfg.targetLang, function (tr, er) {
+              if (tr) c.translationsList[segIdx] = tr;
+              else if (er && !allState.firstErr) allState.firstErr = { engine: "google", detail: er };
+              si++;
+              stepSeg();
+            });
+          };
+          stepSeg();
+        }
+      }
+
+      pump();
     }
   }
 }

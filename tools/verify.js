@@ -81,6 +81,14 @@ for (const [a, b] of PAIRS) {
   ok(A === B, a + ' 与 ' + b + ' 去掉「已声明的平台差异」后仍不一致(说明有一侧被单边改动了)');
 }
 
+/* 分离边界: 翻译脚本保持精简, 不复用 FakeNitro 的目录/黑名单实现, 不发通知。 */
+for (const file of ['loon/translate-response.js', 'Shadowrocket/translate-response.sr.js']) {
+  const text = fs.readFileSync(path.join(ROOT, file), 'utf8');
+  ok(text.indexOf('fakenitro_emoji_catalog') === -1, file + ' 不应包含 FakeNitro 目录逻辑');
+  ok(text.indexOf('discord_blocked_users') === -1, file + ' 不应包含 FakeNitro 黑名单逻辑');
+  ok(text.indexOf('$notification.post') === -1, file + ' 不应再发翻译通知');
+}
+
 /* 校验器自检: 平台差异归一化不能把真实改动一起吞掉 */
 {
   const base = fs.readFileSync(path.join(ROOT, 'loon/translate-response.js'), 'utf8');
@@ -392,24 +400,6 @@ const ORDER = ['enabled', 'probe', 'debug', 'target_lang', 'engine', 'provider',
   eq(c.done.length, 1, '非目标 URL: $done 次数');
   eq(c.http.length, 0, '非目标 URL: 网络调用次数');
 }
-// J2. /messages 合并路径: 黑名单占位 + 翻译必须同时生效, 且只 $done 一次
-{
-  const BODY = JSON.stringify([
-    { id: '2', author: { id: '111111111111111111', username: 'blocked' }, content: 'blocked message' },
-    { id: '1', author: { id: '222222222222222222', username: 'normal' }, content: 'Hello world' }
-  ]);
-  const c = run(SR, {
-    argument: { enabled: true, target_lang: 'zh-CN', cache_on: false, engine: 'google', manual_ids: '111111111111111111', maxcalls: 16, first_batch: 8 },
-    url: URL_MESSAGES.replace('limit=25', 'limit=2'),
-    body: BODY
-  });
-  eq(c.done.length, 1, '/messages 合并路径: $done 次数');
-  const d = payloadOf(c) && payloadOf(c).body ? JSON.parse(payloadOf(c).body) : null;
-  ok(Array.isArray(d) && d.length === 2, '/messages 合并路径: 未保留满页占位');
-  ok(d && d[0] && d[0].content === '[已屏蔽]', '/messages 合并路径: 黑名单未占位 ' + JSON.stringify(d));
-  ok(d && d[1] && String(d[1].content).indexOf('你好') !== -1, '/messages 合并路径: 正常消息未翻译');
-}
-
 /* ---------------- 4b. Shadowrocket 文档格式: argument=k=v&k=v ---------------- */
 {
   const KV = 'enabled=true&target_lang=zh-CN&cache_on=false&maxcalls=16&first_batch=8';
