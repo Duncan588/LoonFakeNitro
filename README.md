@@ -4,35 +4,51 @@ Discord iOS 增强插件套件 — 两个独立插件,Loon / Shadowrocket 双支
 
 | 插件 | 功能 | Loon | Shadowrocket |
 |---|---|---|---|
-| **Discord Translate** | 消息/论坛标题/首楼实时翻译,谷歌免费+AI 双引擎,双语,秒开不卡滑 | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=loon%3A%2F%2Fimport%3Fplugin%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252FDiscord.Translate.plugin) | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=shadowrocket%3A%2F%2Finstall%3Fmodule%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252FDiscord.Translate.module) |
-| **Fake Nitro** | 资料页 Nitro 伪装:premium_type=2 + NITRO 徽章 + entitlements 注入 | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=loon%3A%2F%2Fimport%3Fplugin%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252Ffake-nitro.plugin) | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=shadowrocket%3A%2F%2Finstall%3Fmodule%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Flatest%252Fdownload%252Ffake-nitro.module) |
+| **Discord Translate** | Discord 翻译 | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=loon%3A%2F%2Fimport%3Fplugin%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Fdownload%252Fv1.21%252FDiscord.Translate.plugin) | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=shadowrocket%3A%2F%2Finstall%3Fmodule%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Fdownload%252Fv1.21%252FDiscord.Translate.module) |
+| **Fake Nitro** | 表情解锁 | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=loon%3A%2F%2Fimport%3Fplugin%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Fdownload%252Fv1.21%252Ffake-nitro.plugin) | [点击安装](https://duncan588.github.io/LoonFakeNitro/redirect.html?t=shadowrocket%3A%2F%2Finstall%3Fmodule%3Dhttps%253A%252F%252Fgithub.com%252FDuncan588%252FLoonFakeNitro%252Freleases%252Fdownload%252Fv1.21%252Ffake-nitro.module) |
 
-> 点击安装 → 进入中转跳转,自动拉起对应 App 完成安装。链接是普通 https,#GitHub 不会过滤。
+> 点击安装 → 进入中转跳转,自动拉起对应 App 完成安装。
 
 ---
 
 ## 📁 仓库结构
 
 ```
-loon/                        Loon 侧:插件 + 脚本
-  Discord.Translate.plugin     翻译插件(Loon 格式)
-  fake-nitro.plugin            假会员插件(Loon 格式)
-  translate-response.js        翻译响应脚本
-  fake-nitro-display.js        假会员显示脚本
-Shadowrocket/                Shadowrocket 侧:模块 + 脚本
-  Discord.Translate.module     翻译模块(.module 格式)
-  fake-nitro.module            假会员模块(.module 格式)
-  translate-response.sr.js     翻译响应脚本(Shadowrocket 版)
-  fake-nitro-display.sr.js     假会员显示脚本(Shadowrocket 版)
-tools/                       部署工具
-  deploy_nitro_mitm.sh         一键部署 mitmproxy(READY 注入 + Basic 认证)
-assets/                      图标
+.
+├── loon/                             Loon 侧插件与脚本
+│   ├── Discord.Translate.plugin       翻译插件
+│   ├── fake-nitro.plugin              假会员插件
+│   ├── translate-response.js          翻译响应脚本
+│   ├── fake-nitro-display.js          资料页 Nitro 显示脚本
+│   ├── fakenitro-send.js              :emoji: 发送侧转换脚本
+│   ├── fakenitro-catalog.js            表情目录采集脚本
+│   └── blocklist-record.js             拉黑记录脚本
+├── Shadowrocket/                     Shadowrocket 侧模块与脚本
+│   ├── Discord.Translate.module       翻译模块
+│   ├── fake-nitro.module              假会员模块
+│   ├── translate-response.sr.js       翻译响应脚本
+│   ├── fake-nitro-display.sr.js       资料页 Nitro 显示脚本
+│   ├── fakenitro-send.sr.js           :emoji: 发送侧转换脚本
+│   ├── fakenitro-catalog.sr.js         表情目录采集脚本
+│   └── blocklist-record.sr.js          拉黑记录脚本
+├── tools/                            离线验证与部署工具
+│   ├── verify.js                      插件/模块/脚本总验证
+│   ├── regression-blocklist.js        拉黑过滤回归
+│   ├── deploy_nitro_mitm.sh           mitmproxy READY 注入部署
+│   └── fixtures/
+│       └── translate-response.prepatch.js  旧脚本负对照
+├── assets/                           插件图标
+│   ├── discord-translate.jpg
+│   └── fake-nitro.jpg
+├── README.md
+├── LICENSE
+├── redirect.html                     GitHub Pages 安装跳转
+├── .gitattributes
+├── .gitignore
+└── .nojekyll
 ```
 
 > 安装时**按平台选对应文件**:Loon 用 `.plugin`,Shadowrocket 用 `.module`,两者不能混用。
-> 所有文件的下载地址都是 `releases/latest/download/<文件名>`(release 资产是平铺的,名字与仓库内文件名一致)。
-
-
 ---
 
 ## 📖 翻译插件使用方法(Discord Translate)
@@ -45,17 +61,14 @@ assets/                      图标
 
 ### Shadowrocket 安装(模块)
 1. **配置 → HTTPS 解密** → 生成 CA → 安装 → 系统设置里信任该证书(不信任的话含 MITM 的模块不生效)
-2. **配置 → 模块** → 右上角 **➕** → 填模块链接(表格里 Shadowrocket 那格的链接,或直接填 `releases/latest/download/Discord.Translate.module`)→ 下载
+2. **配置 → 模块** → 右上角 **➕** → 填模块链接(表格里 Shadowrocket 那格的链接,或直接填 `releases/download/v1.21/Discord.Translate.module`)→ 下载
 3. **全局路由设为「配置」** —— 含规则/脚本的模块只在「配置」模式下生效
 4. 改参数:**配置 → 模块 → 点击本模块 → 「编辑参数」**,按需填写后保存(自定义值存本地 `.meta`,模块更新不丢)
    也可手动改规则 `argument=` 里的 **`k=v`,多项用 `&` 连接**;⚠️ **不要写成 JSON**(`{...}`)——逗号会把这一行的属性切碎,整条规则失效
 5. 杀掉 Discord 重开
 
 > **看日志**:Shadowrocket → **数据 → 代理 → 启用日志记录**,产生流量后回到 **数据 → 代理** 看日志;
-> 记录上标 `MITM` 表示该域名已解密(没标 = 没解密,脚本不会被调用)。右上角 `•••` 可导出。
->
 > Loon 与 Shadowrocket 不能混装:Loon 装 `.plugin`,Shadowrocket 装 `.module`。两者共用同一套脚本逻辑。
-> 模块里的 `[MITM] hostname = %APPEND% ...` 必须带 `%APPEND%`(否则会覆盖配置里其他模块的解密域名列表)。
 
 ### 主要参数(插件面板)
 | 参数 | 默认 | 说明 |
@@ -75,6 +88,7 @@ assets/                      图标
 > 面板里改即可,不用重装插件。反过来卡顿就把「每响应调用上限」调小。
 
 ### 版本历史
+- **v1.21**: 翻译脚本保持精简并移除异常通知；FakeNitro catalog 不再注册 `/messages`，两个插件不再互相抢占同一条响应 URL
 - **v1.20**: 双语模式真正生效(此前开关是空壳);修复「`@url:`/URL 之后的原文不翻译」——URL 保护正则字符类写坏导致 URL 从未被保护 + 多可译段时译文索引错位;修复自由段两端空格被 trim 造成文字与 @提及/URL 粘连;修复「翻译缓存=关」不生效且会清空已有缓存
 - **v1.5**: 同步翻译条数默认 8→30(整页同步,不再只翻第一屏);漏翻时三项一起调大
 - **v1.4**: 默认值调大 —— 单次最大翻译条数 10→30、每响应调用上限 16→30(一页 25 条一次翻完);漏翻时把这两项一起调大
@@ -150,8 +164,9 @@ DOMAIN,gateway.discord.gg,NitroMitm
 
 **CC BY-NC-SA 4.0** — 允许分发与修改,衍生作品必须以相同协议开源(ShareAlike),禁止商用(NonCommercial)。
 
+完整许可文本与声明见仓库根目录 [LICENSE](LICENSE)。CC BY-NC-SA 4.0 是 Creative Commons 的作品许可，不是 OSI 标准软件许可证；如果后续需要改为标准软件许可证，应单独做授权决策。
+
 Loon 平台与 Discord 商标归其原权利人。
-GitHub 仓库初始 fork/学习:参考 Equicord fakeNitro 机制、BiliUniverse 插件结构。
 
 ### 改完必跑(离线验证)
 ```
