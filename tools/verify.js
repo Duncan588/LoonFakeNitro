@@ -472,7 +472,7 @@ const ORDER = ['enabled', 'probe', 'debug', 'target_lang', 'engine', 'provider',
   const PROFILE_URL = 'https://discord.com/api/v9/users/' + ME + '/profile';
   const PROFILE_BODY = JSON.stringify({ user: { id: ME, username: 'me' }, premium_type: 0, badges: [] });
 
-  const c1 = run(FN, { argument: JSON.stringify({ enabled: true, feature: 'display', user_id: ME }), url: PROFILE_URL, body: PROFILE_BODY });
+  const c1 = run(FN, { argument: JSON.stringify({ enabled: true, user_id: ME }), url: PROFILE_URL, body: PROFILE_BODY });
   eq(c1.done.length, 1, 'FN/SR: $done 次数');
   ok(!!(payloadOf(c1) && payloadOf(c1).body), 'FN/SR: 未注入');
   if (payloadOf(c1) && payloadOf(c1).body) {
@@ -482,7 +482,7 @@ const ORDER = ['enabled', 'probe', 'debug', 'target_lang', 'engine', 'provider',
   }
   const c2 = run(FN, { argument: JSON.stringify({ enabled: true, user_id: ME }), url: 'https://discord.com/api/v9/users/123/profile', body: PROFILE_BODY });
   ok(!(payloadOf(c2) && payloadOf(c2).body), 'FN/SR: 对别人的资料页也注入了');
-  const c3 = run(FN, { argument: [true, 'display', ME], url: PROFILE_URL, body: PROFILE_BODY });
+  const c3 = run(FN, { argument: [true, ME], url: PROFILE_URL, body: PROFILE_BODY });
   ok(!!(payloadOf(c3) && payloadOf(c3).body), 'FN/位置数组: 未注入');
   const c4 = run(FN, { argument: JSON.stringify({ enabled: true, user_id: ME }), url: PROFILE_URL, body: 'not json' });
   ok(!c4.threw, 'FN: 非 JSON body 抛异常 ' + c4.threw);
@@ -493,10 +493,27 @@ const ORDER = ['enabled', 'probe', 'debug', 'target_lang', 'engine', 'provider',
   const c6 = run(FN, { argument: JSON.stringify({ enabled: false }), url: PROFILE_URL, body: PROFILE_BODY });
   ok(!(payloadOf(c6) && payloadOf(c6).body), 'FN: enabled=false 仍然注入');
   // Shadowrocket 文档格式
-  const c7 = run(FN, { argument: 'enabled=true&feature=display&user_id=' + ME, url: PROFILE_URL, body: PROFILE_BODY });
+  const c7 = run(FN, { argument: 'enabled=true&user_id=' + ME, url: PROFILE_URL, body: PROFILE_BODY });
   ok(!!(payloadOf(c7) && payloadOf(c7).body), 'FN/k=v: 未注入');
   const c8 = run(FN, { argument: 'enabled=false&user_id=' + ME, url: PROFILE_URL, body: PROFILE_BODY });
   ok(!(payloadOf(c8) && payloadOf(c8).body), 'FN/k=v enabled=false: 仍然注入');
+
+  // 防回归: Loon 规则里 argument=[...] 不允许出现重复占位符。
+  // 历史 bug: display 规则曾写成 [{enabled},{enabled},{user_id}] 给死参数 feature 顶位,
+  // Loon 遇到重复占位符会静默跳过整条规则、零日志 —— 显示层在真机上从未执行过。
+  const loonPlugin = fs.readFileSync(path.join(ROOT, 'loon/fake-nitro.plugin'), 'utf8');
+  const srModule = fs.readFileSync(path.join(ROOT, 'Shadowrocket/fake-nitro.module'), 'utf8');
+  let dupPlaceholder = 0;
+  const dupRe = /argument=\[([^\]]*)\]/g;
+  let mm;
+  while ((mm = dupRe.exec(loonPlugin))) {
+    const items = mm[1].split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    if (new Set(items).size !== items.length) dupPlaceholder++;
+  }
+  eq(dupPlaceholder, 0, 'loon plugin: argument=[] 存在重复占位符');
+  ok(!/\benabled=true&enabled=/.test(srModule), 'SR module: argument 里 enabled 重复');
+  ok(!/\bfeature=/.test(srModule), 'SR module: 残留死参数 feature');
+  ok(!/ARG_ORDER\s*=\s*\[[^\]]*"feature"/.test(FN), 'display 脚本: ARG_ORDER 残留死槽位 feature');
 }
 
 /* ---------------- 6b. v1.20 回归: 双语模式 / 多段索引 / cache_off ---------------- */

@@ -22,7 +22,10 @@ function parseArgString(s) {
   }
   return o;
 }
-var ARG_ORDER=["enabled","feature","user_id"];
+/* 只保留真正被读取的两个槽位。历史包袱：这里曾是 ["enabled","feature","user_id"]，
+   而 [Argument] 从没声明 feature，规则里只能用 {enabled} 顶位写成 [{enabled},{enabled},{user_id}]，
+   Loon 遇到重复占位符会静默跳过整条规则、零日志 —— 显示层因此在真机上从未执行过。 */
+var ARG_ORDER=["enabled","user_id"];
 var _A=(typeof $argument==="undefined")?null:$argument;
 if(typeof _A==="string"){
   var _s=_A.replace(/^\s+|\s+$/g,"");
