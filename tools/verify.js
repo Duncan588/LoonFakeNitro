@@ -514,6 +514,29 @@ const ORDER = ['enabled', 'probe', 'debug', 'target_lang', 'engine', 'provider',
   ok(!/\benabled=true&enabled=/.test(srModule), 'SR module: argument 里 enabled 重复');
   ok(!/\bfeature=/.test(srModule), 'SR module: 残留死参数 feature');
   ok(!/ARG_ORDER\s*=\s*\[[^\]]*"feature"/.test(FN), 'display 脚本: ARG_ORDER 残留死槽位 feature');
+
+  // FakeNitro display 侧契约：脚本 ARG_ORDER <-> .plugin 规则 argument=[...] <-> SR 规则 k=v
+  // （§2b 只覆盖 Translate 的 16+ 参数，display 侧此前无自动校验，2026-10-09 补上）
+  // sameSet 在 §2b 的块作用域里，这里自己定义一个
+  const sameSet = (a, b) => a.slice().sort().join(',') === b.slice().sort().join(',');
+  const fnOrder = (FN.match(/var\s+ARG_ORDER\s*=\s*\[([^\]]*)\]/) || [, ""])[1]
+    .split(",").map(s => s.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
+  const uniq = a => [...new Set(a)];
+  ok(fnOrder.length >= 2, 'display 脚本 ARG_ORDER 解析异常: ' + fnOrder.join(","));
+  const loonPh = [];
+  const loonLines = loonPlugin.split(/\r?\n/).filter(l => /^http-response/.test(l) && /fake-nitro-display\.js/.test(l));
+  for (const l of loonLines) {
+    const m = l.match(/argument=\[([^\]]*)\]/);
+    if (m) loonPh.push(...m[1].split(",").map(s => s.trim().replace(/^\{|\}$/g, "")).filter(Boolean));
+  }
+  ok(sameSet(uniq(loonPh), fnOrder), 'display: .plugin argument 占位符与 ARG_ORDER 不一致\n      占位符=' + uniq(loonPh).join(",") + '\n      ARG_ORDER=' + fnOrder.join(","));
+  const srKeys = [];
+  for (const l of srModule.split(/\r?\n/)) {
+    if (!/^Nitro (Display|SelfUser|Entitlements)/.test(l)) continue;
+    const m = l.match(/argument=(.*)$/);
+    if (m) srKeys.push(...m[1].split("&").filter(Boolean).map(p => p.slice(0, p.indexOf("="))));
+  }
+  ok(sameSet(uniq(srKeys), fnOrder), 'display: SR k=v 键与 ARG_ORDER 不一致\n      键=' + uniq(srKeys).join(",") + '\n      ARG_ORDER=' + fnOrder.join(","));
 }
 
 /* ---------------- 6b. v1.20 回归: 双语模式 / 多段索引 / cache_off ---------------- */

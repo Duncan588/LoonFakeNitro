@@ -25,7 +25,7 @@ function parseArgString(s) {
 /* 只保留真正被读取的两个槽位。历史包袱：这里曾是 ["enabled","feature","user_id"]，
    而 [Argument] 从没声明 feature，规则里只能用 {enabled} 顶位写成 [{enabled},{enabled},{user_id}]，
    Loon 遇到重复占位符会静默跳过整条规则、零日志 —— 显示层因此在真机上从未执行过。 */
-var ARG_ORDER=["enabled","user_id"];
+var ARG_ORDER=["enabled","user_id","avatar_asset","avatar_sku"];
 var _A=(typeof $argument==="undefined")?null:$argument;
 if(typeof _A==="string"){
   var _s=_A.replace(/^\s+|\s+$/g,"");
@@ -48,6 +48,10 @@ var ARGS=_A;
 function CFGv(k,d){ return ARGS&&ARGS[k]!==undefined&&ARGS[k]!==null&&ARGS[k]!==""?ARGS[k]:d; }
 var _EN=CFGv("enabled", true); if(_EN==="false"||_EN===0||_EN==="0") _EN=false;
 var USER_ID=String(CFGv("user_id", _A.user_id||""));
+var AVATAR_ASSET=String(CFGv("avatar_asset", _A.avatar_asset||""));
+var AVATAR_SKU=String(CFGv("avatar_sku", _A.avatar_sku||""));
+/* 留空 = 不注入头像框；只填 asset 没填 sku 也不注入（两者必须配对） */
+var WANT_AVATAR=(AVATAR_ASSET.length>0 && AVATAR_SKU.length>0);
 var DONE=false;
 function doneOnce(a){ if(DONE) return; DONE=true; try{$done(a);}catch(e){} }
 function log(m){ try{ console.log("[FakeNitro] "+m); }catch(e){} }
@@ -67,11 +71,16 @@ var FAKE_BADGES=[
    另一位用户已装配的值(该号本身没有 Nitro，说明客户端对"查看者不拥有的装饰"也只渲染、不校验归属)；
    display_name_styles 抓包里全是 null，无真实样本，按文档枚举合成，置信度低于前三项。 */
 var FAKE_COSMETICS = {
-  avatar_decoration_data: { asset:"a_f824f7f3d04732ce5e2ff0f3f05d1937", sku_id:"1427463138634109027", expires_at:null },
   nameplate: { asset:"nameplates/orb/infinite_swirl/", palette:"violet", label:"COLLECTIBLES_ORB_INFINITE_SWIRL_NP_A11Y", sku_id:"1427463138646954035", expires_at:null },
-  display_name_styles: { font_id:6, effect_id:7, colors:[7440367,12381471,16744152,5219201,7440367] },
+  /* 名字颜色取 686 会员号抓包里的真实值, 不再按文档猜 */
+  display_name_styles: { font_id:6, effect_id:2, colors:[2797222,16762000] },
   profile_effect: { sku_id:"1427463138634109028", expires_at:null }
 };
+/* 头像框改为面板参数 avatar_asset + avatar_sku, 默认值是会员号自己的那一件 */
+function avatarDecoration(){
+  if(!WANT_AVATAR) return null;
+  return { asset:AVATAR_ASSET, sku_id:AVATAR_SKU, expires_at:null };
+}
 
 var body=bodyText($response?$response.body:null);
 var url=$request?($request.url||""):"";
@@ -99,7 +108,8 @@ else if(/\/api\/v\d+\/users\/[^\/]+\/profile$/i.test(path)){
       /* 本地装饰解锁：只往已存在的 user / user_profile 里加字段，不新建对象，
          避免因为缺必填字段让客户端解析失败。装饰挂在 user 上，资料特效挂 user_profile 上。 */
       if(d.user&&typeof d.user==="object"){
-        if(!d.user.avatar_decoration_data) d.user.avatar_decoration_data=FAKE_COSMETICS.avatar_decoration_data;
+        var _av=avatarDecoration();
+        if(_av&&!d.user.avatar_decoration_data) d.user.avatar_decoration_data=_av;
         if(!d.user.display_name_styles) d.user.display_name_styles=FAKE_COSMETICS.display_name_styles;
         if(!d.user.collectibles||typeof d.user.collectibles!=="object") d.user.collectibles={};
         if(!d.user.collectibles.nameplate) d.user.collectibles.nameplate=FAKE_COSMETICS.nameplate;
@@ -129,7 +139,8 @@ else if(/\/api\/v\d+\/users\/@me$/i.test(path)){
       dm.premium_type=2;
       dm.premium=true;
       if(!dm.premium_since) dm.premium_since=DEFAULT_SINCE;
-      if(!dm.avatar_decoration_data) dm.avatar_decoration_data=FAKE_COSMETICS.avatar_decoration_data;
+      var _av2=avatarDecoration();
+      if(_av2&&!dm.avatar_decoration_data) dm.avatar_decoration_data=_av2;
       if(!dm.display_name_styles) dm.display_name_styles=FAKE_COSMETICS.display_name_styles;
       if(!dm.collectibles||typeof dm.collectibles!=="object") dm.collectibles={};
       if(!dm.collectibles.nameplate) dm.collectibles.nameplate=FAKE_COSMETICS.nameplate;
