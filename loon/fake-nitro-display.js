@@ -62,6 +62,17 @@ var FAKE_BADGES=[
   { id:"guild_booster_lvl1", description:"Server Booster", icon:"51040c70d4f20a921ad6674ff86fc95c" }
 ];
 
+/* 本地装饰解锁。字段结构取自 discord-userdoccers 的 user.mdx / collectibles.mdx；
+   取值全部来自真实抓包：avatar_decoration / nameplate / profile_effect 是 642 抓包里
+   另一位用户已装配的值(该号本身没有 Nitro，说明客户端对"查看者不拥有的装饰"也只渲染、不校验归属)；
+   display_name_styles 抓包里全是 null，无真实样本，按文档枚举合成，置信度低于前三项。 */
+var FAKE_COSMETICS = {
+  avatar_decoration_data: { asset:"a_f824f7f3d04732ce5e2ff0f3f05d1937", sku_id:"1427463138634109027", expires_at:null },
+  nameplate: { asset:"nameplates/orb/infinite_swirl/", palette:"violet", label:"COLLECTIBLES_ORB_INFINITE_SWIRL_NP_A11Y", sku_id:"1427463138646954035", expires_at:null },
+  display_name_styles: { font_id:6, effect_id:7, colors:[7440367,12381471,16744152,5219201,7440367] },
+  profile_effect: { sku_id:"1427463138634109028", expires_at:null }
+};
+
 var body=bodyText($response?$response.body:null);
 var url=$request?($request.url||""):"";
 var path=url.split("?")[0];
@@ -85,6 +96,23 @@ else if(/\/api\/v\d+\/users\/[^\/]+\/profile$/i.test(path)){
         for(var i=0;i<d.badges.length;i++){ if(d.badges[i]&&d.badges[i].id===fb.id){ seen=true; break; } }
         if(!seen) d.badges.unshift(fb);
       }
+      /* 本地装饰解锁：只往已存在的 user / user_profile 里加字段，不新建对象，
+         避免因为缺必填字段让客户端解析失败。装饰挂在 user 上，资料特效挂 user_profile 上。 */
+      if(d.user&&typeof d.user==="object"){
+        if(!d.user.avatar_decoration_data) d.user.avatar_decoration_data=FAKE_COSMETICS.avatar_decoration_data;
+        if(!d.user.display_name_styles) d.user.display_name_styles=FAKE_COSMETICS.display_name_styles;
+        if(!d.user.collectibles||typeof d.user.collectibles!=="object") d.user.collectibles={};
+        if(!d.user.collectibles.nameplate) d.user.collectibles.nameplate=FAKE_COSMETICS.nameplate;
+      }
+      if(d.user_profile&&typeof d.user_profile==="object"){
+        if(!d.user_profile.profile_effect) d.user_profile.profile_effect=FAKE_COSMETICS.profile_effect;
+        if(!Array.isArray(d.user_profile.collectibles)) d.user_profile.collectibles=[];
+        var _hasEff=false;
+        for(var ce=0;ce<d.user_profile.collectibles.length;ce++){
+          if(d.user_profile.collectibles[ce]&&d.user_profile.collectibles[ce].sku_id===FAKE_COSMETICS.profile_effect.sku_id){ _hasEff=true; break; }
+        }
+        if(!_hasEff) d.user_profile.collectibles.push({ sku_id:FAKE_COSMETICS.profile_effect.sku_id, type:1, expires_at:null });
+      }
       log("profile injected");
       doneOnce({ body: JSON.stringify(d) });
     } else doneOnce({});
@@ -101,6 +129,10 @@ else if(/\/api\/v\d+\/users\/@me$/i.test(path)){
       dm.premium_type=2;
       dm.premium=true;
       if(!dm.premium_since) dm.premium_since=DEFAULT_SINCE;
+      if(!dm.avatar_decoration_data) dm.avatar_decoration_data=FAKE_COSMETICS.avatar_decoration_data;
+      if(!dm.display_name_styles) dm.display_name_styles=FAKE_COSMETICS.display_name_styles;
+      if(!dm.collectibles||typeof dm.collectibles!=="object") dm.collectibles={};
+      if(!dm.collectibles.nameplate) dm.collectibles.nameplate=FAKE_COSMETICS.nameplate;
       log("self user injected");
       doneOnce({ body: JSON.stringify(dm) });
     } else doneOnce({});
