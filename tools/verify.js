@@ -262,6 +262,8 @@ for (const file of ['Shadowrocket/Discord.Translate.module', 'Shadowrocket/fake-
     if (inMitm) { mitmSeen = true; ok(s.indexOf('%APPEND%') !== -1, file + ' [MITM] 缺 %APPEND%(会覆盖配置里其他模块的解密域名): ' + s); continue; }
     if (!/type=http-(?:response|request)/.test(s)) continue;
     ruleSeen++;
+    const sp = (s.match(/script-path=([^,]+)/) || [])[1];
+    if (sp) ok(sp.indexOf('?') === -1, file + ' script-path 不能带查询串(Shadowrocket 模块会失效): ' + sp);
     const arg = (s.match(/argument=(.*)$/) || [])[1];
     if (arg !== undefined) {
       // Shadowrocket 的 argument 是 k=v&k=v;出现 {} 或 , 会把这一行的属性切碎
