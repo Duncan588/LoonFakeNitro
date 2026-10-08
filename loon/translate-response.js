@@ -37,6 +37,10 @@ function num(v, dflt) {
 function str(v, dflt) {
   return (v === null || v === undefined) ? dflt : String(v);
 }
+function cleanArgValue(v) {
+  if (typeof v === "string" && /^\{\{\{[^}]*\}\}\}$/.test(v.trim())) return "";
+  return v;
+}
 
 /* ---------- 跨平台兼容层(Loon / Shadowrocket / Surge 通用) ---------- */
 /* Loon:  argument=[{enabled},{probe},...]  -> $argument 已是具名对象
@@ -74,6 +78,11 @@ if (Array.isArray(__ARG)) {
   __ARG = __pos;
 }
 if (__ARG && typeof __ARG !== "object") __ARG = null;
+if (__ARG && typeof __ARG === "object") {
+  for (var __ak in __ARG) {
+    if (Object.prototype.hasOwnProperty.call(__ARG, __ak)) __ARG[__ak] = cleanArgValue(__ARG[__ak]);
+  }
+}
 
 function bodyText(b) {
   if (b === null || b === undefined) return null;

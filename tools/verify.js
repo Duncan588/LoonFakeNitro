@@ -402,6 +402,27 @@ const ORDER = ['enabled', 'probe', 'debug', 'target_lang', 'engine', 'provider',
   eq(c.done.length, 1, '非目标 URL: $done 次数');
   eq(c.http.length, 0, '非目标 URL: 网络调用次数');
 }
+// J2. Shadowrocket 空值占位符不能被当成真实参数值
+{
+  const c = run(SR, {
+    argument: {
+      enabled: true,
+      target_lang: 'zh-CN',
+      cache_on: false,
+      engine: 'auto',
+      provider: '自定义端点',
+      api_key: '{{{AI API Key}}}',
+      custom_base_url: '{{{自定义端点}}}',
+      maxcalls: 16,
+      first_batch: 8
+    }
+  });
+  ok(!c.threw, '未展开占位符: 抛异常 ' + c.threw);
+  eq(c.done.length, 1, '未展开占位符: $done 次数');
+  ok(translated(c), '未展开占位符: 未产生译文');
+  ok(c.http.some(function (o) { return !o.body; }), '未展开占位符: 未回落到 Google GET');
+  ok(!c.http.some(function (o) { return !!o.body; }), '未展开占位符: 仍误发 AI POST');
+}
 /* ---------------- 4b. Shadowrocket 文档格式: argument=k=v&k=v ---------------- */
 {
   const KV = 'enabled=true&target_lang=zh-CN&cache_on=false&maxcalls=16&first_batch=8';
