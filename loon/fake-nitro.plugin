@@ -1,5 +1,5 @@
 #!name = Discord Fake Nitro
-#!desc = Discord 假会员 V1.22
+#!desc = Discord 假会员 V1.23
 #!author = DiscordLoon
 #!homepage = https://github.com/Duncan588/LoonFakeNitro
 #!icon = https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/assets/fake-nitro.jpg
@@ -17,11 +17,12 @@ manual_ids = input,,tag=手动黑名单,desc=额外用户ID,逗号分隔;App内�
 block_server = input,,tag=黑名单同步服务器,desc=拉黑列表跨设备同步的服务器地址(如 http://x.x.x.x:1280/block)。留空=只在本设备记录
 
 [Script]
-http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/[^\/]+\/profile(\?|$) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fake-nitro-display.js?v=1112,requires-body=true,timeout=15,tag=Nitro Display,enable={enabled},argument=[{enabled},{user_id}]
-http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me\/entitlements(?!\/) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fake-nitro-display.js?v=1112,requires-body=true,timeout=15,tag=Nitro Entitlements,enable={enabled},argument=[{enabled},{user_id}]
-http-request  ^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/messages(\/\d+)?(\?|$) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fakenitro-send.js?v=1112,requires-body=true,timeout=15,tag=FakeNitro Send,enable={enabled},argument=[{enabled},{emoji_size}]
-http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/(guilds\/\d+\/(top-emojis|emojis)|emojis) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fakenitro-catalog.js?v=1112,requires-body=true,timeout=20,tag=FakeNitro Emoji Directory,enable={enabled},argument=[{enabled},{emoji_size},{manual_ids},{block_server}]
-http-request  ^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me\/relationships\/\d+(\?|$) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/blocklist-record.js?v=1112,requires-body=true,timeout=15,tag=Block Record,enable={enabled},argument=[{enabled},{manual_ids},{block_server}]
+http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/[^\/]+\/profile(\?|$) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fake-nitro-display.js?v=1113,requires-body=true,timeout=15,tag=Nitro Display,enable={enabled},argument=[{enabled},{user_id}]
+http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me(\?|$) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fake-nitro-display.js?v=1113,requires-body=true,timeout=15,tag=Nitro SelfUser,enable={enabled},argument=[{enabled},{user_id}]
+http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me\/entitlements(?!\/) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fake-nitro-display.js?v=1113,requires-body=true,timeout=15,tag=Nitro Entitlements,enable={enabled},argument=[{enabled},{user_id}]
+http-request  ^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/messages(\/\d+)?(\?|$) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fakenitro-send.js?v=1113,requires-body=true,timeout=15,tag=FakeNitro Send,enable={enabled},argument=[{enabled},{emoji_size}]
+http-response ^https?:\/\/discord(app)?\.com\/api\/v\d+\/(guilds\/\d+\/(top-emojis|emojis)|emojis) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/fakenitro-catalog.js?v=1113,requires-body=true,timeout=20,tag=FakeNitro Emoji Directory,enable={enabled},argument=[{enabled},{emoji_size},{manual_ids},{block_server}]
+http-request  ^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me\/relationships\/\d+(\?|$) script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/loon/blocklist-record.js?v=1113,requires-body=true,timeout=15,tag=Block Record,enable={enabled},argument=[{enabled},{manual_ids},{block_server}]
 
 [Mitm]
 hostname = discord.com, *.discord.com

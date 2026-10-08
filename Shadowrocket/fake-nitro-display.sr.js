@@ -90,6 +90,22 @@ else if(/\/api\/v\d+\/users\/[^\/]+\/profile$/i.test(path)){
     } else doneOnce({});
   }catch(e){ log("profile parse fail"); doneOnce({}); }
 }
+else if(/\/api\/v\d+\/users\/@me$/i.test(path)){
+  /* PATCH /users/@me:客户端改自己资料时服务端回传完整自助用户对象,
+     含 premium_type / avatar_decoration_data / primary_guild / display_name_styles 等。
+     历史文档曾说该端点不存在,684 真机抓包里实锤存在(PATCH, 200)。
+     注意:这里不过滤 user_id —— /@me 注定是本人。 */
+  try{
+    var dm=JSON.parse(body);
+    if(dm&&typeof dm==="object"){
+      dm.premium_type=2;
+      dm.premium=true;
+      if(!dm.premium_since) dm.premium_since=DEFAULT_SINCE;
+      log("self user injected");
+      doneOnce({ body: JSON.stringify(dm) });
+    } else doneOnce({});
+  }catch(e){ log("self user parse fail"); doneOnce({}); }
+}
 else if(/\/api\/v\d+\/users\/@me\/entitlements$/i.test(path)){
   try{
     var d2=JSON.parse(body);

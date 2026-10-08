@@ -1,5 +1,5 @@
 #!name=Discord Fake Nitro
-#!desc=Discord 假会员 V1.22
+#!desc=Discord 假会员 V1.23
 #!author=DiscordLoon
 #!homepage=https://github.com/Duncan588/LoonFakeNitro
 #!icon=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/main/assets/fake-nitro.jpg
@@ -17,6 +17,7 @@ block_server = input,,tag=黑名单同步服务器,desc=拉黑列表跨设备同
 
 [Script]
 Nitro Display = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/[^\/]+\/profile(\?|$), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/9b4070e68a0ab940560eccdf2fe1a8b772ff1c6e/Shadowrocket/fake-nitro-display.sr.js, requires-body=1, timeout=15, argument=enabled=true&user_id=
+Nitro SelfUser = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me(\?|$), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/9b4070e68a0ab940560eccdf2fe1a8b772ff1c6e/Shadowrocket/fake-nitro-display.sr.js, requires-body=1, timeout=15, argument=enabled=true&user_id=
 Nitro Entitlements = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/users\/@me\/entitlements(?!\/), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/9b4070e68a0ab940560eccdf2fe1a8b772ff1c6e/Shadowrocket/fake-nitro-display.sr.js, requires-body=1, timeout=15, argument=enabled=true&user_id=
 FakeNitro Send = type=http-request, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/channels\/\d+\/messages(\/\d+)?(\?|$), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/9b4070e68a0ab940560eccdf2fe1a8b772ff1c6e/Shadowrocket/fakenitro-send.sr.js, requires-body=1, timeout=15, argument=enabled=true&emoji_size=48
 FakeNitro Emoji Directory = type=http-response, pattern=^https?:\/\/discord(app)?\.com\/api\/v\d+\/(guilds\/\d+\/(top-emojis|emojis)|emojis), script-path=https://raw.githubusercontent.com/Duncan588/LoonFakeNitro/9b4070e68a0ab940560eccdf2fe1a8b772ff1c6e/Shadowrocket/fakenitro-catalog.sr.js, requires-body=1, timeout=20, argument=enabled=true&emoji_size=48&block_server=
