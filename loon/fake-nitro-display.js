@@ -51,6 +51,14 @@ function log(m){ try{ console.log("[FakeNitro] "+m); }catch(e){} }
 function probeLog(m){ try{ console.log("[FakeNitro] hit " + m); }catch(e){} }
 probeLog("url=" + ($request?($request.url||""):"?"));
 
+/* 伪装徽章与时间戳: 字段结构取自 645 真会员抓包的真实 badge 条目, 仅本地显示 */
+var DEFAULT_SINCE="2024-01-01T00:00:00+00:00";
+var FAKE_BADGES=[
+  { id:"nitro", description:"Discord Nitro", icon:"a7a36a80e2ebc06eeab8481f30b5d543", link:"https://discord.com/nitro" },
+  { id:"premium_tenure_6_month_v2", description:"Discord Nitro", icon:"2895086c18d5531d499862e41d1155a6" },
+  { id:"guild_booster_lvl1", description:"Server Booster", icon:"51040c70d4f20a921ad6674ff86fc95c" }
+];
+
 var body=bodyText($response?$response.body:null);
 var url=$request?($request.url||""):"";
 var path=url.split("?")[0];
@@ -64,12 +72,15 @@ else if(/\/api\/v\d+\/users\/[^\/]+\/profile$/i.test(path)){
     if(d && typeof d==="object"){
       d.premium_type=2;
       d.premium=true;
-      if(!d.premium_since) d.premium_since="2024-01-01T00:00:00+00:00";
+      if(!d.premium_since) d.premium_since=DEFAULT_SINCE;
+      if(!d.premium_guild_since) d.premium_guild_since=DEFAULT_SINCE;
+      if(d.guild_member&&typeof d.guild_member==="object"&&!d.guild_member.premium_since) d.guild_member.premium_since=DEFAULT_SINCE;
       d.badges=d.badges||[];
-      var has=false;
-      for(var i=0;i<d.badges.length;i++){ if(d.badges[i]&&d.badges[i].id==="nitro"){ has=true; break; } }
-      if(!has){
-        d.badges.unshift({ id:"nitro", description:"Discord Nitro", icon:"a7a36a80e2ebc06eeab8481f30b5d543", link:"https://discord.com/nitro" });
+      for(var bi=FAKE_BADGES.length-1;bi>=0;bi--){
+        var fb=FAKE_BADGES[bi];
+        var seen=false;
+        for(var i=0;i<d.badges.length;i++){ if(d.badges[i]&&d.badges[i].id===fb.id){ seen=true; break; } }
+        if(!seen) d.badges.unshift(fb);
       }
       log("profile injected");
       doneOnce({ body: JSON.stringify(d) });
